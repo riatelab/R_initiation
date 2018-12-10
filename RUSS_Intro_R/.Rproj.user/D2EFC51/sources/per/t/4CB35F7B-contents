@@ -1,0 +1,120 @@
+library("sf")
+library("cartography")
+library("osmdata")
+library("dplyr")
+
+# Import des géométries de référence (IGN)
+arrd <- st_read(dsn = "paris/quartier_arrondissement.shp", stringsAsFactors = F)
+depts <- st_read(dsn = "paris/DEPARTEMENT.shp", stringsAsFactors = F)
+
+# Extraction de Paris
+Paris <- depts[depts$CODE_DEPT == 75,]
+
+# Projection de référence (France)
+prj  <- st_crs(Paris) 
+
+# Etendue spatiale des données à collecter (bounding box en WGS84)
+bbox <- st_bbox(st_transform(Paris,4326))
+
+
+######### CAMERAS DE VIDEO SURVEILLANCE ###########
+
+# Mes objets OSM d'intérêt
+key <- 'man_made'
+value <- 'surveillance'
+
+# Quartiers (couche d'intersection)
+quartiers <- st_read(dsn = "paris/quartier_paris_pop12_pop07.shp", stringsAsFactors = F)
+
+# Extraction des données
+query <- opq(bbox = bbox , timeout = 2000) %>% add_osm_feature(key = key, value = value)
+osm <- osmdata_sf(query)$osm_points
+osm <- st_transform(osm, prj)
+
+# On ne garde que les caméras dans Paris
+osm$ok <- st_intersects(st_geometry(osm), st_geometry(Paris), sparse = FALSE)
+osm <- osm[osm$ok == TRUE,]
+
+# Combien de caméras par quartiers ? 
+osm_quartiers <- st_intersection(x = st_transform(quartiers, prj), y = st_centroid(osm))
+osm_quartiers <- osm_quartiers %>% 
+  group_by(c_quinsee) %>% 
+  count()
+osm_quartiers <- st_set_geometry(osm_quartiers, NULL)
+
+# Combien de caméras par habitants ? 
+quartiers <- merge (x = quartiers, y = osm_quartiers, by = "c_quinsee", all.x = T)
+quartiers$density <- quartiers$n / quartiers$P12_POP * 1000 
+quartiers  <- replace(quartiers,is.na(quartiers),0)
+
+# Cartographie
+cols <- carto.pal(pal1 = "red.pal",  n1 = 5)  
+
+plot(st_geometry(Paris), col = NA, border = NA)
+
+choroLayer(quartiers, var = "density",
+           border = "grey80",col = cols, method ="fisher-jenks",
+           nclass = 5, legend.pos = "topleft", legend.values.rnd = 2,
+           lwd=0.5, add = T, 
+           legend.title.txt = paste0("Caméras de vidéo surveillance \npour 1000 habitants en 2018\nTotal = ",nrow(osm)," points"))
+
+plot(st_geometry(osm), pch=20, col="black", cex = 0.8, add= T)
+plot(st_geometry(arrd), col = NA, border = "black", add = T)
+
+layoutLayer(title = "Paris, vous êtes surveillés !",
+            author = "Ronan Ysebaert - Hugues Pécout, 2018", sources = "OSM, INSEE, 2018",
+            scale = 1,
+            frame = TRUE,
+            theme = "red.pal")
+
+
+
+################ RESTAURANTS INDIENS #####################
+
+key <- 'amenity'
+value <- 'restaurant'
+
+# Quartiers (couche d'intersection)
+quartiers <- st_read(dsn = "paris/quartier_paris_pop12_pop07.shp", stringsAsFactors = F)
+
+# Extraction des données
+query <- opq(bbox = bbox , timeout = 2000) %>% add_osm_feature(key = key, value = value)
+osm <- osmdata_sf(query)$osm_points
+osm <- st_transform(osm, prj)
+
+# On ne prend que les restaurants indiens dans Paris
+osm <- osm[osm$cuisine %in% c('indian'), ]
+osm$ok <- st_intersects(st_geometry(osm), st_geometry(Paris), sparse = FALSE)
+osm <- osm[osm$ok == TRUE,]
+
+# Combien de restaurants par quartier ? 
+osm_quartiers <- st_intersection(x = st_transform(quartiers, prj), y = st_centroid(osm))
+osm_quartiers <- osm_quartiers %>% 
+  group_by(c_quinsee) %>% 
+  count()
+osm_quartiers <- st_set_geometry(osm_quartiers, NULL)
+
+# Combien de caméras par habitants ? 
+quartiers <- merge (x = quartiers, y = osm_quartiers, by = "c_quinsee", all.x = T)
+quartiers$density <- quartiers$n / quartiers$P12_POP * 1000 
+quartiers  <- replace(quartiers,is.na(quartiers),0)
+
+# Cartographie
+cols <- carto.pal(pal1 = "green.pal",  n1 = 5)  
+
+plot(st_geometry(Paris), col = NA, border = NA)
+
+choroLayer(quartiers, var = "density",
+           border = "grey80",col = cols, method ="fisher-jenks",
+           nclass = 5, legend.pos = "topleft", legend.values.rnd = 2,
+           lwd=0.5, add = T, 
+           legend.title.txt = paste0("Restaurants indiens\npour 1000 habitants en 2018\nTotal = ",nrow(osm)," points"))
+
+plot(st_geometry(osm), pch=20, col="red", cex = 0.8, add= T)
+plot(st_geometry(arrd), col = NA, border = "black", add = T)
+
+layoutLayer(title = "Envie de cheese-nan ?",
+            author = "Ronan Ysebaert - Hugues Pécout, 2018", sources = "OSM, INSEE, 2018",
+            scale = 1,
+            frame = TRUE,
+            theme = "red.pal")

@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1542885608889.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "F4954B60",
+    "lastKnownWriteTime" : 23081149961076847,
+    "last_content_update" : 1542885608889,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "A0056F49",
+        "caption" : "quartiers",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=quartiers&cache_key=A0056F49",
+        "displayedObservations" : "80",
+        "environment" : "",
+        "object" : "quartiers",
+        "preview" : "0",
+        "totalObservations" : "80",
+        "variables" : "12"
+    },
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1543915924754.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3672039036",
+    "id" : "43C3BBA1",
+    "lastKnownWriteTime" : 1543596540,
+    "last_content_update" : 1543596540,
+    "path" : "D:/RUSS_running_example/Script_exemple.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "281,0",
+        "scrollLine" : "280"
+    },
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

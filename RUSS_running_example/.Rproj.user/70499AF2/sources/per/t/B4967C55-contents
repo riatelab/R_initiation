@@ -1,0 +1,491 @@
+---
+title: "R Markdown - Un support pour diffuser ses résultats. Exemple appliqué à l'analyse des évolutions de population observées dans le département du Rhône"
+author: "Ronan Ysebaert, Hugues Pécout, 2018"
+date: "Décembre 2018"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+    theme: cosmo
+---
+
+# Import des données
+
+Données INSEE (populations légales 1968-2015), géométries communales (IGN)
+et appartenances territoriales (EPCI).
+
+
+```{r data_import, eval=TRUE, warning=FALSE}
+# Importer à partir d'un fichier Excel (INSEE) 
+library(readxl)
+data2015 <- data.frame(read_excel("data/Fichier_poplegale_6815.xlsx", skip = 7, sheet = "2015")) 
+data1990 <- data.frame(read_excel("data/Fichier_poplegale_6815.xlsx", skip = 7, sheet = "1990")) 
+data1975 <- data.frame(read_excel("data/Fichier_poplegale_6815.xlsx", skip = 7, sheet = "1975")) 
+
+# Importer des géométries communales (IGN - Geofla 2016)
+library(sf)
+communes <- st_read(dsn = "data/COMMUNE.shp", stringsAsFactors = F)
+
+# Importer l'appartenance intercommunale des communes de la Métropole du Grand Paris
+EPT <- read.csv(file = "data/EPT_Lyon.csv", sep = ";", stringsAsFactors = F,encoding = "UTF-8" )
+EPT$INSEE_COM <- as.character(EPT$INSEE_COM)
+```
+
+Code communal (INSEE) utile pour le calcul de distance. 
+```{r, eval=TRUE, warning=FALSE}
+# Définir un centre (pour les calculs de distance)
+moncentre <- "69123"
+```
+
+
+
+# Manipulation de données
+
+Mise en forme des données pour les traitements ultérieurs.
+
+```{r data_manipulation, eval=TRUE, warning=FALSE}
+# Jointure : On regroupe les objets data2015, data1990 et data1975 en un seul objet "data"
+data <- merge(data2015, data1990, by.x = "COM", by.y = "COM", all.x = T)
+data <- merge(data, data1975, by.x = "COM", by.y = "COM", all.x = T) 
+
+# Jointure 2 : On regroupe avec les Etablissements publics territoriaux d'appartenance
+data <- merge(data, EPT, by.x = "COM", by.y = "INSEE_COM", all.y = T)
+
+# Jointure 3 : On ne conserve que les communes de la MGP
+communes <- merge(communes, EPT, by.x = "INSEE_COM", by.y = "INSEE_COM")
+
+# Supprimer les objets inutiles (pas obligatoire mais permet d'y voir plus clair... Dans les faits on réalise plutôt cette opération à la fin du programme)
+rm(data1975,data1990,data2015,EPT)
+
+# Conserver uniquement certaines variables et les renommer
+fields <- c("COM", "NCC.x", "PSDC75", "PSDC90", "PMUN15", "EPT", "EPT_Nom")
+data <- data[,fields]
+colnames(data) <- c("COM","Nom","POP_1975","POP_1990","POP_2015", "EPT", "EPT_Nom")
+
+# Créer de nouveaux indicateurs à partir de variables pré-existantes
+# Variable quantitative : taux de croissance moyens annuels 1975-1990, 1990-2015 et 1990-2015
+data$acc_7590 <- 100 * (exp(log(data$POP_1990 / data$POP_1975) / (1990 - 1975))-1)
+data$acc_9015 <- 100 * (exp(log(data$POP_2015 / data$POP_1990) / (2015 - 1990))-1)
+data$acc_7515 <- 100 * (exp(log(data$POP_2015 / data$POP_1975) / (2015 - 1975))-1)
+head(data)
+# Variable qualitative : un petit test conditionnel (quelles communes sont en croissance démographique ?)
+data$typo9015 <- ifelse(data$acc_9015 >= 0 & data$acc_9015 < 1, "POP+ (0-1%)",
+                        ifelse(data$acc_9015 > 1, "POP++ (+1%)",
+                               "POP- (<0%)"))
+
+# Extraite une chaine de caractère : département d'appartenance de chaque commune ? 
+library(stringr)
+data$DEP <- str_sub(data$COM,  1, 2)
+
+# Et si on aggrégeait le fond communal en EPT ? 
+library(dplyr)
+agg <- communes %>% group_by(EPT) %>% summarize(names = first(EPT_Nom))
+```
+
+# Quelques statistiques et représentations graphiques associées
+
+## Statistiques de base
+
+Résumé statistique des indicateurs
+```{r summary_stats, eval=TRUE, warning=FALSE}
+summary(data)
+```
+
+## Calcul de distances
+
+Calcul de distances depuis un centre identifié, Lyon dans ce cas.
+
+```{r distance_calc, eval=TRUE, warning=FALSE}
+monpoly <- communes[communes$INSEE_COM == moncentre,]
+communes$distance <- c(st_distance(st_centroid(x = monpoly), st_centroid(x = communes)))
+communes$distance <- as.numeric(communes$distance)
+data <- merge(x = data, y = communes[,c("INSEE_COM","distance")], by.x = "COM", by.y = "INSEE_COM", all.x = TRUE)
+```
+
+
+## Populations communales aux différentes dates de recensement
+
+Les communes du département du Rhône sont globalement faiblement peuplées à
+l'exception des communes de la métropole lyonnaise...
+
+```{r histpop, eval=TRUE, warning=FALSE,  fig.width = 15, fig.height = 8}
+par(mar = c(2,2,2,2)) 
+par(mfrow = c(2,2))
+
+for (i in 3:5){ # On prend les colonnes 3 à 5 du dataframe
+  popYear <- colnames(data) # récupérer le nom des colonnes
+  hist(data[ ,i], # un histogramme
+       breaks = 20, # la série statistique est coupée en 20 classes
+       main = popYear[i], # titre
+       col = "#4286f4", # couleur des barres
+       border = "white", # couleur des bordures
+       xlab = "Population", # titre de l'axe des X
+       ylab = "Fréquence") # titre de l'axe des Y
+}
+```
+
+
+## Relation distance au centre de la Métropole et accroissement de la population ?
+
+Il existe une relation significative entre la distance à la métropole lyonnaise
+et le taux d'accroissement de la population pour la période 1975-1990, mais
+pas pour la période 1990-2015
+
+```{r corr_test, eval=TRUE, warning=FALSE}
+cor.test(data$acc_9015, data$distance)
+cor.test(data$acc_7590, data$distance)
+```
+
+En analysant les graphiques, on constate que cette relation est négative. En 
+d'autres termes, plus la distance augmente moins l'accroissement de la population
+était important sur la période 1975-1990. 
+
+```{r regression, eval=TRUE, warning=FALSE, fig.width = 15, fig.height = 8}
+data$DEP <- as.factor(data$DEP)
+
+library(cartography)
+colours <- carto.pal(pal1 = "multi.pal", n1 = nlevels(data$DEP)) # 1 couleur par dépt
+
+# Assigner les couleurs aux départements d'appartenance
+data <-data[order(data$DEP, decreasing = FALSE), ]
+data$col <- as.factor(data$DEP)
+levels(data$col) <- colours
+# Représentation graphique
+par(mfrow = c(1,2))
+plot(data$distance, data$acc_9015,
+     ylab = "Taux d'accroissement moyen annuel (1990-2015, %)",
+     xlab = "Distance au centre de l'espace d'étude (m) ",
+     pch = 20,
+     col = as.vector(data$col))
+# Afficher la régression linéaire
+abline((lm(data$acc_9015 ~ data$distance)), col = "red", lwd =1)
+# Afficher la légende
+data$DEP <- as.factor(data$DEP)
+legend("topleft", legend = levels(data$DEP),pch = 20,col = colours, cex = 0.5, pt.cex = 1,
+       title = "Département")
+
+# Il suffirait de quelques modifications dans le code pour reproduire cette analyse avec
+# le taux d'accroissement sur la précédente période censitaire ! 
+# Représentation graphique
+plot(data$distance, data$acc_7590,
+     ylab = "Taux d'accroissement moyen annuel (1975-1990, %)",
+     xlab = "Distance au centre de l'espace d'étude (m) ",
+     pch = 20,
+     col = as.vector(data$col))
+# Afficher la régression linéaire
+abline((lm(data$acc_7590 ~ data$distance)), col = "red", lwd =1)
+# Afficher la légende
+data$DEP <- as.factor(data$DEP)
+legend("topleft", legend = levels(data$DEP),pch = 20,col = colours, cex = 0.5, pt.cex = 1,
+       title = "Département")
+```
+
+## Effet d'appartenance à l'EPCI pour des catégories d'accroissement de population ?
+
+La probabilité d’obtenir une valeur du Khi-2 observée aussi élevée dans un échantillon de la taille observée sous l’hypothèse d’indépendance des deux variables est inférieure à 0.001%. Il est donc possible de rejeter l’hypothèse d’indépendance. Il semble bien exister l'EPCI d'appartenance des communes avec les catégories d'évolution de 
+population précédemment créées.
+
+```{r khi2, eval=TRUE, warning=FALSE}
+tab <- table(data$typo9015, data$EPT_Nom)
+tab.chi2 <- chisq.test(tab)
+tab.chi2
+```
+
+La preuve avec ce diagramme en bâtons...
+
+```{r barplot, eval=TRUE, warning=FALSE,  fig.width = 15, fig.height = 8}
+library(questionr)
+ctab <- cprop(tab, total = FALSE)
+# Diagramme en bâton
+par(mar = c(10,2,2,2))
+col <- c("#fc8d59","#a6d96a","#1a9641")
+barplot(ctab, main = "Croissance démographique 1990-2015 par EPT",las = 2, col= col,
+        cex.axis=0.75, cex.names = 0.75)
+legend("topright", c("POP- (<0%)", "POP+ (0-1%)","POP++ (+1%)"), fill = col, cex = 0.8, bg = "#ffffff80")
+```
+
+
+## Taux de croissances de la population ventilés par EPCI (boxplot)
+
+Allons plus loin, qu'en est-il quand nous analysons plus en détails les valeurs
+de ces taux de croissance ? 
+
+```{r boxplot, eval=TRUE, warning=FALSE, fig.width = 15, fig.height = 8}
+data$EPT <- with(data, reorder(EPT, acc_9015, mean, na.rm = TRUE))
+
+col <- carto.pal(pal1 = "red.pal", n1 = (nlevels(data$EPT)/2), pal2 = "green.pal", n2 = (nlevels(data$EPT)/2),
+                 middle = FALSE, transparency = TRUE)
+
+par(mar = c(4,4,4,4))
+boxplot(data$acc_9015 ~ data$EPT,
+        col = col,
+        ylab = "Taux de croissance moyen annuel",
+        varwidth = TRUE,
+        range = 1,
+        outline = TRUE,
+        las = 1) 
+
+# Ligne de repère
+abline (h = seq(min(data$acc_9015,na.rm=T),max(data$acc_9015,na.rm=T),0.5), col = "#00000080", lwd = 1, lty = 1)
+
+# Représenter les valeurs moyennes
+xi<- tapply(data$acc_9015, data$EPT, mean, na.rm = T)
+points(xi,col="#7C0000",pch=19)
+
+# Legend for the boxplot
+data$EPT_Nom<- as.factor(data$EPT_Nom)
+data$EPT_Nom <- with(data, reorder(EPT_Nom, acc_9015, mean, na.rm = TRUE))
+legend("topleft",
+       legend = levels(data$EPT_Nom),
+       pch = 20,
+       col = col,
+       cex = 0.6,
+       pt.cex = 1,
+       title = "Etablissements publics territoriaux")
+```
+
+La croissance démographique la plus faible (en moyenne) a été observée dans la communauté de 
+communes des Hauts du Beaujolais, la plus forte dans la communauté de communes des Vallons
+du Lyonnais. La métropole de Lyon représente l'EPCI avec la 2ème plus faible croissance
+démographique sur la période. On peut néanmoins noter la forte dispersion existant 
+au sein de chaque EPCI. En revanche l'EPCI des Vallons du Lyonnais se caractérise par une 
+croissance démographique homogène sur la période, autour de 2%. 
+
+
+# Analyse cartographique
+
+## Cartes de discontinuités
+
+```{r chorodisc, eval=TRUE, warning=FALSE, fig.width = 15, fig.height = 8}
+
+#  Cartographie
+library(cartography)
+
+# On joint les colonnes du dataframe utiles à la carto
+communes <- merge(x = communes, y = data[,c("COM","POP_1975","POP_1990","POP_2015", "acc_9015","acc_7590")],
+                  by.x = "INSEE_COM", by.y = "COM", all.x = TRUE)
+
+
+# Cartographie de discontinuités (choro layer +  discLayer)
+par(mfrow=c(1,2))
+par(mar = c(0.5,0.5,1.5,0.5)) # Ajuster les marges
+
+cols <- carto.pal(pal1 = "red.pal", pal2 = "green.pal",  n1 = 2, n2 = 4)
+
+# 1975- 1990
+plot(st_geometry(communes), col = NA, border = NA)
+
+choroLayer(x = communes, var = "acc_7590", 
+           border = "grey80",
+           col = cols, 
+           breaks = c(min(data$acc_7590,na.rm = T),-0.25,0,0.25,0.5,1,max(data$acc_7590,na.rm = T)),
+           nclass = 10, 
+           legend.pos = "topleft", 
+           legend.values.rnd = 2,
+           lwd=0.5, 
+           add = T,
+           legend.title.txt = "Taux de croissance moyen annuel (%)")
+
+borders <- getBorders(communes)
+
+discLayer(x = borders, # sf 
+          df = communes,
+          var = "acc_7590", # variable used to compute discontinuties 
+          type = "abs", # type of discontinuity measure 
+          method="equal", # discretisation of discontinuities
+          nclass=4, # number of discontinuities classes
+          threshold = 0.5, # representation threshold of discontinuities  
+          sizemin = 0.5, # minimum size of discontinuities lines
+          sizemax = 6, # maximum size of discontinuities lines
+          col="red", # color of the lines
+          legend.values.rnd = 1,
+          legend.title.txt = "Discontinuités \n absolues (max-min)",
+          legend.pos = "bottomleft", 
+          add=TRUE)
+
+layoutLayer(title = "Évolution démo 1975-1990 - Discontinuités territoriales",
+            author = "Ronan Ysebaert, Hugues Pécout 2018", sources = "INSEE, IGN, 2018",
+            scale = 5,
+            frame = TRUE,
+            col = "red",
+            coltitle = "white",
+            south = TRUE)
+
+
+# 1990 - 2015
+plot(st_geometry(communes), col = NA, border = NA)
+
+choroLayer(x = communes, var = "acc_9015", 
+           border = "grey80",
+           col = cols, 
+           breaks = c(min(data$acc_9015,na.rm = T),-0.25,0,0.25,0.5,1,max(data$acc_9015,na.rm = T)),
+           nclass = 10, 
+           legend.pos = "topleft", 
+           legend.values.rnd = 2,
+           lwd=0.5, 
+           add = T,
+           legend.title.txt = "Taux de croissance moyen annuel (%)")
+
+discLayer(x = borders, # sf 
+          df = communes,
+          var = "acc_9015", # variable used to compute discontinuties 
+          type = "abs", # type of discontinuity measure 
+          method="equal", # discretisation of discontinuities
+          nclass=4, # number of discontinuities classes
+          threshold = 0.5, # representation threshold of discontinuities  
+          sizemin = 0.5, # minimum size of discontinuities lines
+          sizemax = 6, # maximum size of discontinuities lines
+          col="red", # color of the lines
+          legend.values.rnd = 1,
+          legend.title.txt = "Discontinuités \n absolues (max-min)",
+          legend.pos = "bottomleft", 
+          add=TRUE)
+
+layoutLayer(title = "Évolution démo 1990-2015 - Discontinuités territoriales",
+            author = "Ronan Ysebaert, Hugues Pécout 2018", sources = "INSEE, IGN, 2018",
+            scale = 5,
+            frame = TRUE,
+            col = "red",
+            coltitle = "white",
+            south = TRUE)
+```
+
+Sur la période 1975 - 1990, c'est la partie nord du département du Rhône qui est concernée
+par la décroissance de la population, ainsi que la métropole Lyonnaise. Cette tendance
+se confirme en s'atténuant sur la période 1990-2015 puisque ce sont ces mêmes territoires
+concernés par les croissances démographiques les plus faibles (qui sont malgré tout positives)...
+On observe néanmoins pas de ruptures territoriales franches au sein de cet espaces d'étude mais
+davantage des gradiants géographiques...
+
+
+## Evolution de la population en fonction de la taille de la population
+
+```{r propchoro, eval=TRUE, warning=FALSE, fig.width = 15, fig.height = 8}
+par(mfrow=c(1,2))
+par(mar = c(0.5,0.5,1.5,0.5)) # Ajuster les marges
+# 1975 - 1990
+plot(st_geometry(communes), col = "lightblue", border = NA)
+plot(st_geometry(agg), col = NA, border = "white", lwd = 1, add = T)
+
+propSymbolsChoroLayer(x = communes, var = "POP_1990", var2 = "acc_7590", 
+                      col = cols,
+                      inches = 0.2, 
+                      breaks = c(min(data$acc_7590,na.rm = T),-0.25,0,0.25,0.5,1,max(data$acc_7590,na.rm = T)),
+                      border = "grey50", lwd = 1,
+                      legend.var.pos = "bottomleft", legend.var2.pos = "topleft",
+                      legend.var2.title.txt = 
+                        "Taux de croissance moyen annuel (%)",
+                      legend.var.title.txt = "Population totale 1990",
+                      legend.var.style = "e",
+                      add = T)
+
+layoutLayer(title = "Évolution démo 1975-1990 et population 1990",
+            author = "Ronan Ysebaert, Hugues Pécout 2018", sources = "INSEE, IGN, 2018",
+            scale = 5,
+            frame = TRUE,
+            col = "red",
+            coltitle = "white",
+            south = TRUE)
+
+
+# 1990 - 2015
+plot(st_geometry(communes), col = "lightblue", border = NA)
+plot(st_geometry(agg), col = NA, border = "white", lwd = 1, add = T)
+
+propSymbolsChoroLayer(x = communes, var = "POP_2015", var2 = "acc_9015", 
+                      col = cols,
+                      inches = 0.2, 
+                      breaks = c(min(data$acc_9015,na.rm = T),-0.25,0,0.25,0.5,1,max(data$acc_9015,na.rm = T)),
+                      border = "grey50", lwd = 1,
+                      legend.var.pos = "bottomleft", legend.var2.pos = "topleft",
+                      legend.var2.title.txt = 
+                        "Taux de croissance moyen annuel (%)",
+                      legend.var.title.txt = "Population totale 2015",
+                      legend.var.style = "e",
+                      add = T)
+
+layoutLayer(title = "Évolution démo 1990-2015 et population 2015",
+            author = "Ronan Ysebaert, Hugues Pécout 2018", sources = "INSEE, IGN, 2018",
+            scale = 5,
+            frame = TRUE,
+            col = "red",
+            coltitle = "white",
+            south = TRUE)
+```
+
+La décroissance de population observée au nord concerne avant tout des communes 
+faiblement peuplées... 
+
+## S'abstraire du maillage en prenant en compte les masses : cartes de potentiel
+
+```{r smoothing maps, eval=TRUE, warning=FALSE, fig.width = 15, fig.height = 8}
+par(mfrow=c(1,2))
+par(mar = c(0.5,0.5,1.5,0.5)) # Ajuster les marges
+
+plot(st_geometry(communes), col = NA, border = NA)
+
+distr <- communes$POP_1990 / communes$POP_1975
+summary(distr)
+cols <- carto.pal(pal1 = "red.pal", pal2 = "green.pal",  n1 = 2, n2 = 5)
+
+smoothLayer(x = communes,
+            var = 'POP_1990', var2 = 'POP_1975',
+            span = 2000, beta = 2,
+            resolution = 500,
+            legend.title.txt = "Potentiel de croissance de population, \n(pas de lissage = 2 km)",
+            col = cols, 
+            breaks = c(min(communes$POP_1990/communes$POP_1975, na.rm=T),
+                       0.95,1,1.05,1.1,1.15,1.2, 
+                       max(communes$POP_1990/communes$POP_1975, na.rm = T)),
+            mask = st_buffer(communes,1),
+            legend.pos = "topleft", legend.values.rnd = 2,
+            add = T)
+
+plot(st_geometry(agg), col = NA, border = "white", lwd = 1, add = T)
+
+layoutLayer(title = "Croissance démographique 1975-1990 - carte de potentiel",
+            author = "Ronan Ysebaert, Hugues Pécout 2018", sources = "INSEE, IGN, 2018",
+            scale = 5,
+            frame = TRUE,
+            col = "red",
+            coltitle = "white",
+            south = TRUE)
+
+# 1990-2015
+plot(st_geometry(communes), col = NA, border = NA)
+
+distr <- communes$POP_2015 / communes$POP_1990
+summary(distr)
+cols <- carto.pal(pal1 = "red.pal", pal2 = "green.pal",  n1 = 2, n2 = 5)
+
+smoothLayer(x = communes,
+            var = 'POP_2015', var2 = 'POP_1990',
+            span = 2000, beta = 2,
+            resolution = 500,
+            legend.title.txt = "Potentiel de croissance de population, \n(pas de lissage = 2 km)",
+            col = cols, 
+            breaks = c(min(communes$POP_2015/communes$POP_1990, na.rm=T),
+                       0.95,1,1.05,1.1,1.15,1.2, 
+                       max(communes$POP_2015/communes$POP_1990, na.rm = T)),
+            mask = st_buffer(communes,1),
+            legend.pos = "topleft", legend.values.rnd = 2,
+            add = T)
+
+plot(st_geometry(agg), col = NA, border = "white", lwd = 1, add = T)
+
+layoutLayer(title = "Croissance démographique 1990-2015 - carte de potentiel",
+            author = "Ronan Ysebaert, Hugues Pécout 2018", sources = "INSEE, IGN, 2018",
+            scale = 5,
+            frame = TRUE,
+            col = "red",
+            coltitle = "white",
+            south = TRUE)
+```
+
+Ces représentations, basé sur le calcul de potentiels apportent une autre visualisation
+de ces phénomènes démographiques. On voit spécifiquement apparaître les pôles
+de décroissance de population sur la période 1975-1990. Pour la période 
+1990-2015, on constate que c'est surtout la périphérie de la métropole lyonnaise
+qui est concernée par une croissance démographique plus faible au regard du reste du 
+territoire. 

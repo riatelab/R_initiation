@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1543915523794.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2990917411",
+    "id" : "E0878845",
+    "lastKnownWriteTime" : 1543915953,
+    "last_content_update" : 1543915953710,
+    "path" : "C:/Users/Ronan/Desktop/RUSS_Intro_R/osm.R",
+    "project_path" : "osm.R",
+    "properties" : {
+        "cursorPosition" : "120,0",
+        "scrollLine" : "102"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

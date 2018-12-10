@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1543501248757.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3672039036",
+    "id" : "7D70E0D7",
+    "lastKnownWriteTime" : 1543596539,
+    "last_content_update" : 1543596539456,
+    "path" : "C:/Users/Ronan/Desktop/RUSS_running_example/Script_exemple.R",
+    "project_path" : "Script_exemple.R",
+    "properties" : {
+        "cursorPosition" : "404,45",
+        "scrollLine" : "379",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

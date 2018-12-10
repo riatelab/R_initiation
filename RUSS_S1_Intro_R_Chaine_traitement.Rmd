@@ -1,0 +1,3449 @@
+---
+title: <p class="title">Introduction à R</p><hr class="lign"><p class="title2">Mettre en oeuvre une chaîne de traitement reproductible</p>
+author: Hugues Pecout (CIST) - Ronan Ysebaert (RIATE)<br>
+date:  Séminaire RUSS (INED) - EHESS, Paris </br> 6 Décembre 2018
+css: ined.css
+output:
+  rmdformats::readthedown:
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+    gallery: true
+    highlight: tango
+--- 
+
+```{r klippy, echo=FALSE, include=TRUE}
+#devtools::install_github("RLesur/klippy")
+klippy::klippy()
+
+options("scipen" = 10)
+```
+
+<div style="text-align:center;margin-top:22px;padding:0;margin-bottom:0;">
+<img  width=150 src="/data/user/p/hpecout/Cours_INED_InitiationR/figures/RUSS_logo.png"></img>
+</div>
+
+*Cette présentation s’adresse aux personnes souhaitant s’initier au language/logiciel R et aux démarches d’analyse reproductibles. Elle s’articule tout d’abord autour d’une présentation de R, de son environnement Rstudio et des atouts de cet outil (polyvalence, extensibilité, reproductibilité...). Dans un second temps et en suivant un exemple illustré sont présentées plusieurs librairies utiles pour couvrir une chaîne de traitement, depuis l’acquisition et la mise en forme des données, en passant par leur analyse et leur représentation jusqu’à leur export et leur valorisation.*
+
+<div id="important_ok">
+
+<p class="objectif1">Objectifs de la séance : </p>
+
+<p class="objectif2"> --  Acquérir les bases du logiciel/language R et de son environnement RStudio.</p>
+<p class="objectif2"> --  Comprendre les atouts de cet outil pour la mise en place d'une chaine de traitements reproductible.</p>
+<p class="objectif2"> --  Découvrir les librairies utiles pour réaliser les traitements les plus courants.</p>
+
+</div> 
+
+<br/>
+
+# Pourquoi R ?
+
+## La (R)évolution
+
+Toutes les disciplines dans lesquelles l’analyse de données occupe une place importante ont connu ces dernières années une petite R-évolution. Depuis le début des années 2000, le logiciel R gagne en importance et s'impose petit à petit comme une référence, au même titre que les trois grands logiciels (payant) d’analyse de données qui domine le marché : SAS, SPSS et Stata.
+
+<p class="center">
+![](/data/user/p/hpecout/Cours_stats_carto_P8/Cours_statistique_R/figures/Evo_TIOBE_Index since_2008.png?style=centerme)
+
+<p class="center">  Figure : Popularité croissante du langage R depuis 2008 (classement Index TIOBE)</p>
+
+<br/>
+
+
+<ul>
+<li>Libre et multiplateforme</li> 
+
+**R est un langage de programmation et un logiciel libre** dédié aux statistiques et à la science des données soutenu par la R Foundation for Statistical Computing. **R fait partie de la liste des paquets GNU.  Il est multiplateforme** et peut donc s'installer sur Windows, Mac OS ou GNU/Linux.
+
+<br/>
+
+<li>Polyvalent</li> 
+
+R permet de manipuler tous types d’objets. C’est d'ailleurs pour une de ces raisons qu’il concurrence, complète ou remplace toute une gamme de logiciels et de langages pré-existants y compris dans des domaines trés spécifiques, par exemple : **la statistique textuelle, l'analyse de graphes, la cartographie, la statistique spatiale, le traitement d'enquête, le webscraping, la production de document, les applications web...**. il entre aussi en concurrence avec d’autres langages très utilisés pour le **calcul scientifique** et l’analyse de données, comme Python.
+
+<br/>
+
+<li>Extensible</li> 
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, include= TRUE, echo=FALSE}
+
+library('rvest')
+url <- "https://cran.r-project.org/web/packages/available_packages_by_date.html"
+#Reading the HTML code from the website
+webpage <- read_html(url)
+td <- webpage %>%  html_nodes("td")
+rank_data <- html_text(td)
+
+vec <- c(NULL)
+for (t in seq(1,length(rank_data),3))  {
+vec <-  c(vec, rank_data[t])
+}
+
+library(stringr)
+vec <- str_trim(vec)
+test <- as.data.frame(vec)
+test$nb <- 1
+test$date <- as.Date(test$vec)
+test <- test[,c(3:2)]
+
+library(plyr)
+test2 <-  ddply(test, .(date), summarize, nb=sum(nb))
+test2$cum <- cumsum(test2$nb)
+test <- test2[,c(1:3)]
+
+nb_function_base <- length(lsf.str("package:base"))
+
+```
+
+R est composé d’un socle commun <span style="color:#4B0082">r-base</span> (fonctions statistiques et graphiques standards, appelées fonctions primitives ou basiques) sur lequel se greffe un ensemble d'extensions appelées <span style="color:#4B0082">packages</span>. **Un package est une bibliothèque de fonctions implémentée par les utilisateurs et mise à disposition de tous** par l’intermédiaire de dépôts regroupés dans le cadre du Comprehensive R Archive Network (CRAN). Cette structure modulaire explique la vaste étendue des applications possibles : **l’expansion du logiciel n’est limité que par les contributions des utilisateurs** du monde entier à la communauté (`r max(test2$cum)` packages disponibles sur le CRAN le `r format(Sys.time(), '%d %b %Y')`.
+
+<br/>
+
+<li>Reproductible</li> 
+
+**L'ensemble d'une chaine de traitement peut ainsi être réalisée sous R**, depuis l'import, la manipulation de données, leur analyse et représentation, jusqu'à leur diffusion. Ce flux de travail intégré est par ailleurs plus efficace et plus sûr : suppression des imports et exports permettant de passer d’un logiciel à l’autre, meilleure manipulation des données (éviter les erreurs courantes de copier/coller dans des interfaces clic-bouton). Au final, le fait de décrire toute la chaine de traitement de l'information dans des scripts exécutables assure **l'archivage, la diffusion et la reproductibilité de l'integralité de son travail et de sa méthodologie.**  
+
+
+<br/>
+
+## Un language pour tout f'R
+
+Ces différents atouts ont fait de R un outil adopté par de nombreuses disciplines scientifiques, aussi bien issues des SHS que des sciences "dures". R dispose aujourd'hui de nombreux contributeurs aux profils et interêts variés, ce qui lui assure un développement fonctionnel et thématique à la fois large et spécialisé.   
+
+Actuellement, en plus des fonctions du socle commun <span style="color:#4B0082">r-base</span>, **`r max(test2$cum)` librairies (packages) sont disponibles sur le <a href="https://cran.r-project.org/" onclick="window.open(this.href); return false;">*Comprehensive R Archive Network (CRAN)*</a>**. De nombreux packages en développement sont aussi mis à disposition sur GhitHub (service web d'hébergement et de gestion de développement de logiciels). Certains champs scientifiques ont également leur propre dépôt, comme la biostatistique avec le site <a href="https://www.bioconductor.org/" onclick="window.open(this.href); return false;">*bioconductor*</a> qui met à disposition plus de 1600 packages (Novembre 2018), permettant d'analyser et décrypter le génome.
+
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, include= TRUE, echo=FALSE}
+
+library(ggplot2)
+ggplot(test2, aes(date,cum)) + geom_line(lwd=1, col='#0162b1') + xlab("") + ylab("") +
+ scale_x_date(date_minor_breaks = "1 month", date_labels = "%Y", 
+ breaks =  as.Date(c('2005-01-01', '2006-01-01', '2007-01-01', '2008-01-01', '2009-01-01', '2010-01-01', '2011-01-01','2012-01-01','2013-01-01', '2014-01-01','2015-01-01', '2016-01-01', '2017-01-01', '2018-01-01', '2019-01-01'))) +
+ ggtitle("Nombre de packages disponibles sur le CRAN") +
+ theme(plot.title = element_text(hjust = 0, size=11,face = "bold" )) + 
+ annotate(geom="text", x=as.Date('2017-01-01'), y=12900, label=paste0(max(test2$cum), ' packages disponibles \n (le ' , format(Sys.time(), '%d %b %Y'), ")"), color="red4", size =3) +
+ geom_point(aes(x=max(test2$date), y=max(test2$cum)), color="red4")
+
+```
+
+R est ainsi trés utilisé dans le monde académique, mais aussi au sein d'organismes publics, d'ONG, chez les analystes travaillant comme consultants (selon Rexer Analytics).   
+Cette communauté éclectique est trés active sur le web. Elle se rassemble par exemple autour du hashtag <a href="https://twitter.com/hashtag/rstats?lang=fr" onclick="window.open(this.href); return false;">*#rstats*</a> sur twitter ou se retrouve sur des forums comme <a href="https://stackoverflow.com/questions/tagged/r" onclick="window.open(this.href); return false;">*Stack Overflow*</a>, qui a pour objectif de rassembler une communauté de développeurs pour partager leurs connaissances ou problèmes dans le domaine de la programmation. Il existe également une importante blogosphère, notamment mise en valeur par les agrégateurs de blogs comme <a href="https://rweekly.org/" onclick="window.open(this.href); return false;">*Rweekly*</a> ou <a href="https://www.r-bloggers.com/" onclick="window.open(this.href); return false;">*R-bloggers*</a>.
+
+
+**Cette communauté importante de contributeurs et d'utilisateurs se traduit par une polyvalence remarquable de l'outil. 
+R se substitue à tout un ensemble de logiciel qu'il était nécessaire de maîtriser et d'utiliser pour réaliser l'ensemble d'une chaine de traitement**. Il est desomais possible de réaliser une chaîne de traitement complète et reproductible à l'aide d'un seul outil libre, gratuit et multiplateforme.
+
+
+<br/>
+
+<p class="center">
+![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/Plan_INED.png?style=centerme)
+
+<br/>
+
+
+## Se facilite(R) la vie avec RStudio
+
+**RStudio est un outil qui vient combler un manque dans la collection des outils associés à R** : il s’agit d’un environnement de développement intégré (IDE en anglais) facilitant la saisie, l’exécution de code, la visualisation des résultats... etc. 
+
+En effet, le logiciel R propose une interface trés pauvre sur MAC et Windows et inexistante sous linux.
+
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/R_windows.PNG)
+</p>
+<p class="center"> Figure : Interface du logiciel R, sous Windows</p>
+
+<br/>
+
+<p class="center">![](/data/user/p/hpecout/Cours_stats_carto_P8/Cours_statistique_R/figures/terminal_R.png)
+</p>
+<p class="center"> Figure : Aucune interface sous Linux. Utilisation du terminal</p>
+
+
+
+L'IDE Rstudio facilite considérablement l'apprentissage et l'utilisation du langage R. **Parque c’est pratique, complet et en rapide évolution : il est recommandé d’utiliser l’environnement RStudio !**
+
+**L'interface de RStudio se présente sous la forme d’une unique fenêtre découpée en quatre zones** que l’on peut redimensionner, masquer ou maximiser selon ses préférences :
+
+<ul>
+<li>L’éditeur de code</li> 
+Cette zone permet l’édition de fichiers source R (avec coloration syntaxique et autocomplétion).
+
+<li>La console</li>
+La console avec la session R en cours d’exécution. La console affiche à la fois le code exécuté et ses résultats associés. 
+
+<li>L’espace de travail</li>
+Cette zone permet de lister, typer et visualiser les objets créés par l'exécution du code R.
+
+<li> Une quatrième zone pemettant de basculer entre :</li>
+Un explorateur de fichiers, une fenêtre graphique, une fenêtre de gestion des packages et de la documentation associée aux fonctions et packages.
+
+
+<p class="center">![](/data/user/p/hpecout/Cours_stats_carto_P8/Cours_statistique_R/figures/R_studio.png)
+</p>
+
+
+<br/>
+
+
+**RStudio propose de nombreuses fonctionnalités intéressantes, par exemple : **
+
+
+<ul>
+<li>La création de projet</li> 
+
+RStudio dispose d’une fonctionnalité très pratique pour **organiser son travail en projets**. L’idée principale est de réunir tous les fichiers et documents relatifs à un même projet (que ce soit les données, les scripts, les rapports automatisés…) dans un répertoire dédié. L’onglet Projects est situé en haut à droite de l’interface. Cela permet notamment de partager à d'autres ses analyses sans avoir à se soucier des chemins permettant d'accéder aux fichiers. **Pourquoi utiliser les projets RStudio ? **
+
+-> **Un repertoire de travail prédéfini** : Le répertoire de travail de R est celui du projet. Il n'est plus utile de paramétrer un répertoire courant. 
+
+-> **Une mémoire de l'espace de travail** :  Lorsque l’on ouvre un projet RStudio, on revient à l’état de notre projet tel qu’il était lors de la dernière utilisation. Les scripts ouverts lors d’une précédente séance de travail sont automatiquement chargés.
+
+-> **Une mobilité améliorée** : Vous pouvez utiliser facilement votre projet et vos scripts sur différentes machines et/ou systèmes d'exploitation sans perdre d'information. Il suffit de copier/coller le répertoire du projet. 
+
+-> **L'utilisation d'un Git** : Il est possible d'utiliser des systèmes de gestion de version comme svn ou git. Les systèmes de gestion de version permettent de gérer les différentes versions de scripts et facilite le travail collaboratif. 
+
+<br/>
+
+<li>Une interface clic-bouton pour faciliter la prise en main de l'outil</li> 
+
+**Plusieurs actions** comme la création et le chargement de programme, l'import de données, l'installation et le chargement de packages, l'accés à la documentation, la visualisation des objets, l'export de figures... **sont exécutables en un simple clic**.
+
+
+<li>L'autocomplétion</li>
+
+RStudio présente aussi la capacité de compléter automatiquement les termes en cours d’écriture.  **L’autocomplétion  fonctionne  avec  la  touche Tab du  clavier**. Cela aide l'utilisateur dans la saisi des noms d'objet, de fonction, de variable, et même des arguments de fonction.
+
+
+<li>Raccourcis clavier</li>
+
+RStudio propose de nombreux raccourcis clavier intéressants, exemple : 
+
+- `Alt` + `-` renvoie l’opérateur d’assignation accompagné d’un espace avant et un espace après (<-)   
+- `Ctrl` + `Entrée` exécute le code écrit dans la fenêtre d’édition (script)
+- `Ctrl` + `1` et `Ctrl` + `2` permettent de passer de la console à l’éditeur de code et vice versa   
+- `shift`+`alt`+`k` pour accéder à l'ensemble des raccourcis. 
+
+<br/>
+
+## > Exemple
+
+**A ce <a href="http://gis-cist.fr/Cours/RUSS_Intro_R.zip" onclick="window.open(this.href); return false;"> lien</a>, vous pouvez télécharger un projet R qui contient des données et un script R prêt à être éxécuté**. Ce script réalise une chaîne de traitement complète. Les données sont successivement téléchargées, explorées, enrichies, analysées et cartographiées. **Il vous suffit de dézipper le dossier, d'ouvrir le projet *RUSS_inro_R.proj* et d'éxécuter le scrit *osm.R*.**
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, include= FALSE, echo=FALSE}
+
+library("sf")
+library("cartography")
+library("osmdata")
+detach("package:plyr", unload=TRUE)
+library("dplyr")
+
+# Import des géométries de référence (IGN)
+arrd <- st_read(dsn = "paris/quartier_arrondissement.shp", stringsAsFactors = F)
+depts <- st_read(dsn = "paris/DEPARTEMENT.shp", stringsAsFactors = F)
+
+# Extraction de Paris
+Paris <- depts[depts$CODE_DEPT == 75,]
+
+# Projection de référence (France)
+prj  <- st_crs(Paris) 
+
+# Etendue spatiale des données à collecter (bounding box en WGS84)
+bbox <- st_bbox(st_transform(Paris,4326))
+
+
+######### CAMERAS DE VIDEO SURVEILLANCE ###########
+
+# Mes objets OSM d'intérêt
+key <- 'man_made'
+value <- 'surveillance'
+
+# Quartiers (couche d'intersection)
+quartiers <- st_read(dsn = "paris/quartier_paris_pop12_pop07.shp", stringsAsFactors = F)
+
+# Extraction des données
+query <- opq(bbox = bbox , timeout = 2000) %>% add_osm_feature(key = key, value = value)
+osm <- osmdata_sf(query)$osm_points
+osm <- st_transform(osm, prj)
+
+# On ne garde que les caméras dans Paris
+osm$ok <- st_intersects(st_geometry(osm), st_geometry(Paris), sparse = FALSE)
+osm <- osm[osm$ok == TRUE,]
+
+# Combien de caméras par quartiers ? 
+osm_quartiers <- st_intersection(x = st_transform(quartiers, prj), y = st_centroid(osm))
+osm_quartiers <- osm_quartiers %>% 
+  group_by(c_quinsee) %>% 
+  count()
+osm_quartiers <- st_set_geometry(osm_quartiers, NULL)
+
+# Combien de caméras par habitants ? 
+quartiers <- merge (x = quartiers, y = osm_quartiers, by = "c_quinsee", all.x = T)
+quartiers$density <- quartiers$n / quartiers$P12_POP * 1000 
+quartiers  <- replace(quartiers,is.na(quartiers),0)
+
+# Cartographie
+cols <- carto.pal(pal1 = "red.pal",  n1 = 5)  
+
+```
+
+Au bout de cette chaîne de traitement, **deux cartes réalisées à partir de données extraites d'OpenStreetMap**:
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE}
+
+par(mar=c(1,0,1.2,0))
+
+plot(st_geometry(Paris), col = NA, border = NA)
+
+choroLayer(quartiers, var = "density",
+           border = "grey80",col = cols, method ="fisher-jenks",
+           nclass = 5, legend.pos = "topleft", legend.values.rnd = 2,
+           lwd=0.5, add = T, 
+           legend.title.txt = paste0("Caméras de vidéo surveillance \npour 1000 habitants en 2018\nn(Paris) = ",nrow(osm)))
+
+plot(st_geometry(osm), pch=20, col="black", cex = .7, add= T)
+plot(st_geometry(arrd), col = NA, border = "black", add = T)
+
+layoutLayer(title = "Paris, vous êtes surveillés !",
+            author = "Ronan Ysebaert - Hugues Pécout, 2018", sources = "OSM, INSEE, 2018",
+            scale = 1,
+            frame = TRUE,
+            theme = "red.pal")
+
+```
+```{r warning=FALSE, message=FALSE, eval=TRUE, include= FALSE, echo=FALSE}
+
+################ RESTAURANTS INDIENS #####################
+
+key <- 'amenity'
+value <- 'restaurant'
+
+# Quartiers (couche d'intersection)
+quartiers <- st_read(dsn = "paris/quartier_paris_pop12_pop07.shp", stringsAsFactors = F)
+
+# Extraction des données
+query <- opq(bbox = bbox , timeout = 2000) %>% add_osm_feature(key = key, value = value)
+osm <- osmdata_sf(query)$osm_points
+osm <- st_transform(osm, prj)
+
+# On ne prend que les restaurants indiens dans Paris
+osm <- osm[osm$cuisine %in% c('indian'), ]
+osm$ok <- st_intersects(st_geometry(osm), st_geometry(Paris), sparse = FALSE)
+osm <- osm[osm$ok == TRUE,]
+
+# Combien de restaurants par quartier ? 
+osm_quartiers <- st_intersection(x = st_transform(quartiers, prj), y = st_centroid(osm))
+osm_quartiers <- osm_quartiers %>% 
+  group_by(c_quinsee) %>% 
+  count()
+osm_quartiers <- st_set_geometry(osm_quartiers, NULL)
+
+# Combien de caméras par habitants ? 
+quartiers <- merge (x = quartiers, y = osm_quartiers, by = "c_quinsee", all.x = T)
+quartiers$density <- quartiers$n / quartiers$P12_POP * 1000 
+quartiers  <- replace(quartiers,is.na(quartiers),0)
+
+# Cartographie
+cols <- carto.pal(pal1 = "green.pal",  n1 = 5)  
+
+```
+```{r warning=FALSE, message=FALSE, eval=TRUE, echo=FALSE}
+
+par(mar=c(1,0,1.2,0))
+
+plot(st_geometry(Paris), col = NA, border = NA)
+
+choroLayer(quartiers, var = "density",
+           border = "grey80",col = cols, method ="fisher-jenks",
+           nclass = 5, legend.pos = "topleft", legend.values.rnd = 2,
+           lwd=0.5, add = T, 
+           legend.title.txt = paste0("Restaurants indiens\npour 1000 habitants en 2018\nn(Paris) = ",nrow(osm)))
+
+plot(st_geometry(osm), pch=20, col="red", cex = .7, add= T)
+plot(st_geometry(arrd), col = NA, border = "black", add = T)
+
+layoutLayer(title = "Envie de cheese-nan ?",
+            author = "Ronan Ysebaert - Hugues Pécout, 2018", sources = "OSM, INSEE, 2018",
+            scale = 1,
+            frame = TRUE,
+            theme = "red.pal")
+
+```
+
+
+<br/>
+
+# 0. Prise en main
+
+<br/>
+
+## 0.1 Installation
+
+Vous pouvez télécharger le logiciel R depuis le <a href="https://cran.r-project.org/" onclick="window.open(this.href); return false;">**Comprehensive R Archive Network (CRAN)**</a> :
+
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/Download.png)
+</p>
+
+Une fois R correctement installé, rendez-vous sur le site web <a href="https://www.rstudio.com/products/rstudio/download/" onclick="window.open(this.href); return false;">**Rstudio**</a> pour télécharger la dernière version stable de RStudio. Plus précisément, il s’agit de l’édition Open Source de **RStudio Desktop** (il existe aussi une version serveur) :
+
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/Rstudio_download.png)
+</p>
+
+Choisissez l’installateur correspondant à votre système d’exploitation et suivez les instructions du programme d’installation.
+
+**Pour mettre à jour R, il suffit de télécharger et d’installer la dernière version du programme d’installation**.  
+Petite particularité, la nouvelle version sera installée à côté de l’ancienne version. Désinstallez l’ancienne version si vous souhaitez faire de la place sur votre disque dur. **Lorsque plusieurs versions de R sont disponibles, RStudio choisit par défaut la plus récente**. Il est vous est possible de spécifier à RStudio quelle version de R utiliser via le menu Tools > Global Options > General.
+
+**Si vous souhaitez utiliser R et RStudio, vous n'avez en aucun cas besoin de lancer le logciel R. Il vous suffit d'ouvrir RStudio**.
+
+
+<br/>
+
+## 0.2 Les projets RStudio
+
+Cette fonctionnalité permet d'organiser son travail en différents projets. L’idée principale est de réunir tous les fichiers relatifs à un même projet (quelque soit leur format) dans un répertoire dédié. **Le menu "Project" est accessible via une icône dédiée située tout en haut à droite** :
+
+<br/>
+
+<p class="center">![](/data/user/p/hpecout/Cours_stats_carto_P8/Cours_statistique_R/figures/project.PNG)
+</p>
+
+<br/>
+
+Dans le menu **Project**, sélectionnez l’option **New project** :
+
+<br/>
+
+<p class="center">![](/data/user/p/hpecout/Cours_stats_carto_P8/Cours_statistique_R/figures/nproj.PNG)
+</p>
+
+<br/>
+
+Dans un nouveau répertoire, créez un projet vide. Indiquez le nom de votre projet, qui sera également le nom du répertoire créé pour stocker les données du projet. Puis, indiquez le répertoire parent, dans lequel votre projet sera créé :
+
+<br/>
+
+<p class="center">![](/data/user/p/hpecout/Cours_stats_carto_P8/Cours_statistique_R/figures/nproj2.PNG)
+</p>
+
+<br/>
+
+
+
+## 0.3 Les objets R
+
+Tout ce qui est créé et manipulé sous R est un objet. Ces objets permettent de stocker et de structurer les données.
+
+
+### Créer un objet
+
+Un objet peut être créé avec l'opérateur « assigner » (`<-`), une flèche composée du signe inférieur (`<`) accolé à un tiret (`-`). Si l'objet existe déjà, sa valeur précédente est remplacée par la nouvelle. La valeur renvoyée peut être le résultat d'une opération et/ou d'une fonction :
+
+```{r warning=FALSE, message=FALSE}
+
+n <- "chaîne de caractères"
+
+n
+
+n <- 15 + 9
+
+n
+
+```
+
+**On peut également écrire une expression sans assigner son résultat ou sa valeur à un objet**, le résultat est alors affiché à l'écran mais n'est pas stocké dans un objet en mémoire :
+
+```{r warning=FALSE, message=FALSE}
+
+(10 + 2) * 5
+
+```
+
+
+<br/>
+
+### La fonction
+
+Le logiciel R dispose de fonctions préprogrammées appelées fonctions primitives ou basiques et regroupés dans le package <span style="color:#4B0082">base</span> qui est automatiquement chargé. Pour connaître toutes les fonctions primitives, utilisez la fonction <span style="color:#8C001A">library(help = "base")</span> :
+
+```{r warning=FALSE, message=FALSE}
+
+library(help = "base")
+
+# Quelques exemples...
+
+# class()           Connaitre la classe de données d'un élément
+# as.character()    Assigner la class 'caractere' à un élement
+# is.numeric()      Tester si un élément est numéric (réponse TRUE ou FALSE) 
+# paste()           Coller des chaine de caractère
+# unlist()         permet de transformer une liste en vecteur
+
+```
+
+**Pour utiliser une fonction, il suffit d'écrire son nom, puis de spécifier des arguments entre parenthése**. 
+
+Exemple de <span style="color:#8C001A">fonctions</span> permettant d'assigner ou de modifier la classe d'un objet :
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+# Les différentes fonctions permettant de modifier la classe de l'objet 'mon_objet' :
+as.vector(x='mon_objet')
+as.data.frame(x='mon_objet')
+as.matrix(x='mon_objet')
+as.array(x='mon_objet')
+as.list(x='mon_objet')
+as.factor(x='mon_objet')
+
+```
+
+```{r warning=FALSE, message=FALSE, eval=TRUE}
+
+# Exemple
+mon_objet <- "20345"
+
+class(mon_objet)
+
+mon_objet <- as.numeric(mon_objet)
+
+class(mon_objet)
+
+```
+
+
+Dans la plupart des cas, les arguments d'une fonction sont prédéfinis. Il est donc important de **se renseigner sur les différents arguments d'une fonction et ses valeurs paramétrées par défault**. Attention, certains arguments n'ont pas de valeur prédéfinie mais doivent obligatoirement être renseigné.
+
+Exemple avec la fonction <span style="color:#8C001A">mean()</span> :
+
+
+```{r warning=FALSE, message=FALSE, eval=TRUE}
+
+notes <- c(11,13,15,17,10,8,14,13,12,15,19,NA)
+
+# Il est évidemment obligatoire de spécifier le vecteur de valeurs sur lequel on calcul une moyenne !
+mean(notes)
+
+```
+
+La fonction <span style="color:#8C001A">mean()</span> retourne NA car la série statistique présente une valeur manquante (NA). **L'arguments na.rm (= FALSE par défault) permet de ne pas prendre en compte les valeurs manquantes** :
+
+```{r warning=FALSE, message=FALSE, eval=TRUE}
+
+# na.rm (= FALSE par défault) permet de prendre en compte ou non les valeurs NA
+mean(notes, na.rm = TRUE)
+
+```
+
+L'utilisateur a  également la possibilité de définir ses propres fonctions. 
+Une fonction est mise dans une variable contenant un bloc d'instructions introduit par la commande <span style="color:#8C001A">function()</span>. La syntaxe générale est :
+
+```{r warning=FALSE, message=FALSE}
+
+nom_de_fonction <- function(arguments) { instructions }
+
+```
+
+Exemple :
+
+```{r warning=FALSE, message=FALSE}
+
+# Ecriture une fonction
+carre <- function(x) {
+  y <- x*x
+  return(y)
+}
+
+# Pour afficher le code source d'une fonction (non primitive), 
+# écrire son nom sans parenthèse :
+carre
+
+# Utiliser une fonction :
+# fonction(argument1=... , argument2=..., argument3=..., ... )
+
+# Exemple :
+# carre(x=3) ou plus simplement :
+carre(3)
+
+```
+
+Si vous souhaitez utiliser une fonction issue d'un package spécifique, vous devez d'abord installer le package et chargez la library :
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+# Installation du package
+install.packages("foreign")
+
+# Chargement de la library
+library(foreign)
+
+# Utilisation de la fonction read.dbf() de la library "foreign"
+# L'argument as.is permet de convertir ou non les vecteurs en facteurs
+read.dbf("D:/users/geographie/Documents/nom_fichier.dbf", as.is = FALSE)
+
+```
+
+<br/>
+
+### Le vecteur
+
+**Un vecteur permet de regrouper des éléments d'une même classe**.
+
+```{r warning=FALSE, message=FALSE }
+
+# Joindre des éléments dans un vecteur
+mon_vecteur <- c(1,2,3,4,5,6,7,8,9)
+mon_vecteur <- c("A","B","C","D","E")
+mon_vecteur <- c("nom", "prenom", 10, 20.78, TRUE)
+mon_vecteur
+
+# Créer une séquence complexe dans un vecteur
+mon_vecteur <- c(seq(2, 3, by=0.5))
+mon_vecteur
+
+# Répeter un vecteur
+mon_vecteur <- c(rep(1:2, times=3))
+mon_vecteur
+
+# Répeter chaque éléments
+mon_vecteur <- c(rep(1:2, each=3))
+mon_vecteur
+
+# Créer un séquence de nombre entier
+mon_vecteur <- c(1:7)
+mon_vecteur
+
+# Ajouter un element à un vecteur
+mon_vecteur_new <- c(mon_vecteur, "Un Element Supplémentaire")
+
+# Interroger les élements d'un vecteur -> mon_vecteur[element]
+# Elément 2
+mon_vecteur[2]
+# Eléments 2 à 4
+mon_vecteur[2:4]
+# Eléments 2 et 5
+mon_vecteur[c(2,5)]
+
+
+```
+
+<br/>
+
+### Le data frame
+
+Un data frame est utilisé pour stocker une table de données. Il s'agit d'une liste de vecteurs de même longueur.
+
+```{r warning=FALSE, message=FALSE}
+
+# Construction de trois vecteurs
+personne <- c('John Doe','Peter Gynn','Jolie Hope','John snow')
+salaire <- as.integer(c(21000, 23400, 26800, 32700))
+date <- as.Date(c('2010-11-1','2008-3-25','2007-3-14', '1678-1-23'))
+
+# Construction du data.frame à partir de trois vecteurs de même longueur
+mon_tableau <- data.frame(personne, salaire, date)
+mon_tableau
+
+# Ajouter une variable
+mon_tableau$New_col_1 <- "mon_texte"
+mon_tableau$New_col_2 <- c(1,2,3,4)
+mon_tableau
+
+# Interroger les éléments d'un tableau -> mon_tableau[ligne,colonne]
+# Ligne 2
+mon_tableau[2,]
+# Colonnes 1 et 3
+mon_tableau[,c(1,3)]
+# Colonne 'personne'
+mon_tableau$personne
+# Ligne 4 & colonne 'personne' - method 1
+mon_tableau[4,"personne"]
+# Ligne 4 & colonne 'personne' - method 2
+mon_tableau$personne[4]
+
+```
+
+<br/>
+
+### La liste
+
+**Une liste est un vecteur d'objets**. Il permet de stocker différents types d'objets dans un seul objet.
+
+```{r warning=FALSE, message=FALSE}
+
+ma_fonction <- function() {cat("hello")}
+mon_vecteur1 <- c('John Doe','Peter Gynn','Jolie Hope','John snow')
+mon_vecteur2 <- as.Date(c('2010-11-1','2008-3-25','2007-3-14', '1678-1-23'))
+mon_tableau <- data.frame(mon_vecteur1, mon_vecteur2)
+
+# Création d'une liste
+ma_liste <- list(ma_fonction, mon_vecteur1, mon_vecteur2,mon_tableau)
+ma_liste
+
+# Ajouter un élément à une liste
+ma_liste[[length(ma_liste) + 1]] <- "J'ajoute un objet à ma liste"
+
+
+# Interroger les objets d'une liste -> ma_list[[élement]][sous element]
+# Objet 1
+ma_liste[5]
+# Objets 2 et 3
+ma_liste[c(2,3)]
+# Tous les objets sauf le 1 et le 4
+ma_liste[-c(1,4)] 
+# Elément 2 de l'objet 3
+ma_liste[[3]][2]
+
+
+```
+
+<br/>
+
+### La matrice
+
+Une matrice est un **tableau de nombre à double entrée**.
+
+```{r warning=FALSE, message=FALSE}
+
+ma_matrice <- matrix(c(1:16), nrow=4, ncol=4) 
+
+# On navigue dans une matrice de la même façon que dans un data frame -> ma_matrice[ligne, colonne]
+ma_matrice[4,3]
+
+```
+
+De nombreuses opérations et <span style="color:#8C001A">fonctions</span> primitives sont applicables à cet objet. Quelques exemples :
+
+```{r warning=FALSE, message=FALSE}
+
+# Multiplication de matrice, élément par élément.
+ma_matrice * ma_matrice 
+# Transposer la matrice
+t(ma_matrice)
+# Sélectionner la diagonale
+diag(ma_matrice)
+# Moyennes des lignes
+rowMeans(ma_matrice)
+# Sommes des colonnes
+colSums(ma_matrice)
+
+```
+
+
+<br/>
+
+### L'array
+
+**Les arrays sont des matrices à plusieurs dimensions**.
+
+```{r warning=FALSE, message=FALSE}
+
+mon_array <- array(1:45, dim=c(3,5,3))
+mon_array
+
+# Interroger les éléments d'un array -> array[ligne,colonne,tableau]
+mon_array[2,5,3]
+
+```
+
+<br/>
+
+### Le Simple Feature data frame 
+
+**L'objet sf est en quelque sorte une table de données géographique**. Il permet de gérer de l'information spatiale. Il s'agit tout simplement d'un dataframe qui stocke également des geométries.
+
+```{r warning=FALSE, message=FALSE}
+
+# Création d'un vecteur de nombre (1 à 10)
+ID <-seq(1:10)
+# Création d'un vecteur de lettres (a à j)
+name <-letters[1:10]
+latitude <- c(48.84905, 48.85217, 48.83349, 48.86528, 48.86409, 48.85176, 48.85207, 48.88334, 48.85758, 48.87391)
+longitude <- c(2.331454, 2.347332, 2.318518, 2.371150, 2.356515, 2.299024, 2.358712, 2.333936, 2.352751, 2.343179)
+
+mes_donnees <- data.frame(ID, name, latitude, longitude)
+
+library(sf)
+mes_donnees_SF <- st_as_sf(mes_donnees, coords = c("longitude", "latitude"), crs = 4326, agr = "constant")
+mes_donnees_SF
+
+# Interroger un objet sf
+# Fonctionne comme pour un data frame pour les différentes variables
+# Colonne 'ID'
+mes_donnees_SF$ID
+# Colonne ID, ligne 3
+mes_donnees_SF$name[3]
+# Geometries de l'entités 3
+mes_donnees_SF$geometry[3]
+
+```
+
+<br/>
+
+### Le facteur
+
+**Un facteur (factor) est un vecteur contenant uniquement certaines valeurs prédéfinies**. Les valeurs pré-définies sont appelées des **levels**.
+
+```{r warning=FALSE, message=FALSE}
+
+
+my_factor <- sample(x = c("North", "East", "South", "West"), size = 13, replace = TRUE)
+my_factor
+
+# Les éléments sont considérés comme caractère
+class(my_factor)
+
+# Conversion en facteur
+my_factor <- factor(my_factor)
+
+# Comment se structure le facteur
+str(my_factor)
+
+# Interroger les éléments d'un factor -> factor[element]
+
+# levels() permet d'obtenir la liste des valeurs :
+levels(my_factor)
+
+# Compte du nombre d'éléménts par level
+summary(my_factor)
+
+# Elément 8
+my_factor[8]
+
+# Elément 7 à 13, avec uniquement les levels présents
+my_factor[7:13, drop=TRUE]
+
+```
+
+<br/>
+
+
+## 0.4 Les opérateurs
+
+
+### Arithémtiques
+
+```{r warning=FALSE, message=FALSE}
+
+# Addition
+5 + 5
+
+# Soustraction
+5 - 5
+
+# Divivion
+5 / 5
+
+# Multiplication
+5 * 5
+
+# Exposant
+5^5
+
+```
+
+<br/>
+
+
+### Relationel
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+  <    # inférieur à 
+  >    # supérieur à 
+  <=   # inférieur ou égal à 
+  >=   # supérieur ou égal à 
+  ==   # égal 
+  !=   # différent 
+  %in% # Test de présence entre deux vecteurs
+  
+  ```  
+
+
+
+```{r warning=FALSE, message=FALSE}   
+
+# Exemple
+5 == 5
+5 != 5
+c(1,2,3) %in% c(2,7,5) 
+
+```
+
+<br/>
+
+### Logique
+
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+  !         # Négation
+  &, &&     # ET 
+  |, ||     # OU inclusif
+  xor(,)    # OU exclusif (retournera TRUE si l'une ou l'autre mais pas les deux sont vraies)
+  is.na()   # Valeur manquante ?
+  is.null() # Valeur Null ?
+  is.character() # Caractère ?
+  is.numeric() # Numérique ?
+
+```
+
+
+
+```{r warning=FALSE, message=FALSE}
+
+# Exemples
+
+# Selection dans un data frame avec plusieus conditions (ET)
+mtcars[mtcars$mpg %in% c(21.0,14.3,22.8,19.2) & mtcars$hp != 123 & mtcars$wt >= 3, ]
+
+# Selection dans un data frame avec plusieus conditions (OU)
+mtcars[mtcars$mpg %in% c(21.0,14.3,22.8,19.2) | mtcars$hp != 123 | mtcars$wt >= 3, ]
+
+# Test valeurs NA (différent de NA ?) dans la variable mtcars$mpg
+!is.na(mtcars$mpg)
+
+```
+
+<br/>
+
+
+## 0.5 Les packages
+
+
+R fourni directement **un important nombre de <span style="color:#8C001A">fonctions</span> pré-installées, stockées dans ce qui est appelé le <span style="color:#4B0082"><a href="https://stat.ethz.ch/R-manual/R-devel/library/base/html/00Index.html" onclick="window.open(this.href); return false;">R Base Package</a></span>**. Il n'est pas nécessaire de les installer ou de les charger, elles sont imédiatement utilisables. À ce jour, **`r nb_function_base` <span style="color:#8C001A">fonctions</span> sont proposées par le le R-base**.
+
+**Les <span style="color:#8C001A">fonctions</span> du r-base permettent d'effectuer les manipulations de données les plus classiques**. Pour effectuer des traitements plus spécifiques, il est nécessaire d'installer des <span style="color:#4B0082">packages</span> mise à disposition par d'autres utilisateurs sur le <a href="https://cran.r-project.org/" onclick="window.open(this.href); return false;">CRAN</a>.     
+**Les <span style="color:#4B0082">packages</span> sont des collections de <span style="color:#8C001A">fonctions</span>**, associées à de la documentation et parfois même à des données. **`r max(test2$cum)` <span style="color:#4B0082">packages</span> supplémentaires** étaient mis à disposition le `r format(Sys.time(), '%d %b %Y')` sur le <a href="https://cran.r-project.org/" onclick="window.open(this.href); return false;">CRAN</a>. Tous les packages disponibles sur <a href="https://cran.r-project.org/" onclick="window.open(this.href); return false;">**The Comprehensive R Archive Network**</a> ont été controlés. Leur fonctionnement technique (uniquement) est garanti, car il s'agit d'un depôt officiel de packages.
+
+Il est également possible d'installer des packages en cours de développement et mise à disposition sur un GIT ou d'installer un <span style="color:#4B0082">package</span> stocké en .tar.gz sur votre machine.
+
+Installer un <span style="color:#4B0082">package</span> en language R :
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+# Pour les packages disponibles sur le CRAN :
+install.packages("cartography") # Installer un package
+update.packages("cartography")  # Mettre à jour un package
+
+# Pour obtenir le chemin de la librarie contenant les packages installés
+.libPaths() 
+# Pour voir tous les packages installés
+library()   
+
+# Pour les packages stocké en local et compressé en tar.gz. Ex (NOT RUN) :
+install.packages("C:\\RJSONIO_0.2-3.tar.gz", repos = NULL, type="source")
+
+# Pour les packages en cours de développement sur un GIT,
+# il est nécessaire d'installer et de charger le package devtools :
+install.packages("devtools")
+library(devtools)
+install_github("riatelab/MTA")
+
+```
+
+Une fois installé, **un <span style="color:#4B0082">package</span> doit être chargé à chaque nouvelle session de R pour être utilisé**. A un package est systématiquement associé de la documentation permettant de comprendre son contenu et aider à sa prise en main : 
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+# Charger un package pour en utiliser ses fonctions
+library("cartography")  
+
+# Utiliser directement une fonction d'un package
+cartography::propSymbolsChoroLayer()
+
+# Accèder à la documentation basique des packages
+help("cartography") 
+
+# Acceder à la documentation d'une fonction
+?mean
+
+# Accèder à une vignette (falcutatif) de package
+vignette(topic = "cartography", package = "cartography")
+
+# Accèder à une cheatsheet (falcutatif) de package
+vignette(topic = "cheatsheet", package = "cartography") 
+
+# Charger un jeu de données exemple (primitif ou de package)
+data(iris)
+
+# Chercher documentation par mot clé
+help.search("weighted mean")
+
+```
+
+<br/>
+
+Exemple de cheatsheet (antisèche en angalis), avec le <span style="color:#4B0082">package</span> "cartography" :
+
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/cheatsheet.png)
+</p>
+
+
+<br/>
+
+**L'interface RStudio permet également l'installation et le chargement manuel des <span style="color:#4B0082">packages</span> ...**
+
+<p class="center">![](/data/user/p/hpecout/Cours_stats_carto_P8/Cours_statistique_R/figures/package.PNG)
+</p>
+
+**...et d'accèder à la documentation :**
+
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/help.png)
+</p>
+
+
+**Sur R, il y a souvent plusieurs manière de réaliser une opération**. On peut ainsi utiliser plusieurs fonctions ou packages pour aboutir au même résultat. **Pour assurer la pérénnité de ses programmes, préferez toujours une fonction issue d'un package de référence**. Les packages de référence sont facilement repérables, en fonction du volume de documentation et d'exemples disponibles sur le web.    
+
+Par exemple, **utilisez de préference les packages produits par RStudio (collection de package <span style="color:#4B0082">tidyverse</span>)**, qui seront logiquement toujours utilisable sur les prochaine version de l'IDE RStudio et extrêmement bien documentés (une <a href="https://www.rstudio.com/resources/cheatsheets/" onclick="window.open(this.href); return false;">**cheatsheet**</a> est disponible pour chaque package de la collection <span style="color:#4B0082">tidyverse</span>). 
+
+<br/>
+
+
+## 0.6 Espace de travail & sauvegarde
+
+### Gérer son espace de travail
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+list.files() / dir() # Afficher le contenu du repertoire courant
+
+getwd() # Afficher le répertoire de travail actuel
+setwd() # Changer le répertoire courant
+
+dir.create()  # Créer un repertoire
+file.remove() / unlink() # Supprimer un fichier
+file.create() # Créer un fichier 
+file.exists() # Tester l'existence d'un fichier
+file.rename() # Renommer un fichier
+file.append() # Fusionner deux fichiers
+file.copy()   # Copier un ficher
+
+save.image()  # Sauvegarder l'espace de travail dans le fichier .RData par défaut
+
+q()           # Quitter R
+
+```
+
+<br/>
+
+###  Sauvegarder et supprimer des objets
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+ls()    # lister les objets définis dans l'espace de travail actuel
+rm()    # Supprimer un objet
+rm(list=ls()) # Supprimer tous les objets
+
+save()  # Sauvegarder des objets dans un fichier RData 
+load()  # Charger un fichier RData
+
+```
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+mon_objet <- c("un", "deux", "trois")
+
+# Sauvegarde de l'objet crée
+save(mon_objet, file="Nom_objet_stocké")
+
+# Suppression de l'objet TEMPORAIRE
+rm(mon_objet) 
+
+# Chargement de l'objet préalablement enregistré
+load("Nom_objet_stocké") 
+
+```
+
+**Toutes ces actions peuvent être réalisées manuellement depuis un explorateur de fichier ou depuis l'interface RStudio**.
+
+<br/>
+
+
+## 0.7 Règles de codage
+
+Les [**règles de codage**](https://fr.wikipedia.org/wiki/R%C3%A8gles_de_codage) permettent d'écrire un code plus clair et plus lisible pour soi et pour les autres. 
+Vous pourrez trouver plusieurs propositions de *coding style* car il n'existe pas de style officiel pour le logiciel R. Quelque soit le style choisi l'idée est de conserver le même tout au long d'un programme.   
+Voir par exemple :   
+
+- [Advanced R - Style guide](http://adv-r.had.co.nz/Style.html)   
+- [Google's R Style Guide](https://google.github.io/styleguide/Rguide.xml)   
+- [R Style Guide](http://jef.works/R-style-guide/)  
+
+
+**Troix règles font tout de même l'unanimité :** 
+
+- Eviter les lignes de plus de 80 charactères.    
+- Utiliser un espace avant et après les opérateurs :
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+# Préférez
+x  <-  12
+# à
+x<-12
+
+# Préférez
+average  <-  mean(feet  /  12 + inches,  na.rm = TRUE)
+# à
+average<-mean(feet/12+inches,na.rm=TRUE)
+
+```
+
+- Eviter les lignes avec plus d'une opération :
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+### Il est possible d'écrire plusieurs opération sur une me ligne, en les séparant d'un ;
+# Exemple
+notes <- c(4,2,8,6,5,9,3,2,5,6); mean(notes); sd(notes)
+
+# Mais cela est à proscrire.
+# Pour plus de visibilité, préférez :
+notes <- c(4,2,8,6,5,9,3,2,5,6)
+mean(notes)
+sd(notes)
+
+```
+
+<br/>
+
+**L'intégration de commentaire dans le code est également une pratique apprécié**. Pour cela, **insérez un # en début de ligne**.
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+# Les caractères suivants seront considérés comme du commentaire
+# Vous pouvez écrire ce que vous voulez, mais toujours précédé d'un #
+
+
+# une chaîne de 5# (#####) permet de créer de bloc de code dépliable :
+
+###### 
+mean(c(1,7,3,2,8,9,2,3))
+
+```
+
+
+
+<br/>
+
+
+# 1. Acquisition de données
+
+## 1.1 Import & téléchargement
+
+<br/>
+
+### Import de données
+
+Il est possible d'importer et d'exporter des données avec R. Pour cela, une série de <span style="color:#8C001A">fonctions</span> (primitives ou non) peut être utilisée.
+Quelques exemples :
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+## IMPORTER
+read.table()   # Importer une table (format multiple)
+
+# Excel 
+read.xlsx()    # Fichier Excel / library(xlsx) 
+loadWorkbook() # Fichier Excel / library(XLConnect)
+read_excel()   # Fichier Excel / library(readxl)...  Beaucoup de librairies pour Excel
+
+read.csv()   # Fichier csv
+read_sas()   # Fichier sas / library(haven)
+read.dbf()   # Fichier dbf / library(foreign)
+read_sf()    # Fichier shape / library(sf)
+
+```
+
+Pour réaliser un import correct, **il est souvent nécessaire de renseigner un certain nombre d'arguments**, comme par exemple :
+
+**header** = valeur logique qui indique si la première ligne du fichier importé contient les noms des variables.<br/>
+**sep** = Indique le séparateur de champ du fichier.<br/>
+**stringsAsFactor** = Le données de type caractère sont transformées (par défaut) en facteur.<br/>
+**Encoding** = Indique l'encodage utilisé pour les chaînes de caractères.<br/>
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+# Import d'un fichier 
+# not run
+Mon_Objet <- read.table(file = "/data/user/documents/mes.donnes.csv", 
+                        header = TRUE, 
+                        sep = ",", 
+                        stringsAsFactors = FALSE, 
+                        encoding = "UTF-8")
+
+```
+
+<br/>
+
+### Téléchargement de données
+
+**Il est possible de télécharger directement des fichiers** quelque soit le format.
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+# Télécharger un fichier
+download.file(url = "https://www.insee.fr/fr/statistiques/fichier/2522602/Fichier_poplegale_6815.xls", 
+              destfile = "/data/user/documents/New_name.xls", 
+              mode = 'wb')
+
+
+# Un fois télécharger, un fichier zip peut également être décompressé
+unzip(zipfile = "data/mes_donnees.zip", exdir = "data/")
+
+```
+
+<br/>
+
+### Jeu de données exemple
+
+De nombreux packages mettent à disposition des jeux de données, le plus souvent pour être utilisé comme exemple par les fonctions du package.
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+# Liste des jeux de données mis à disposition par les packages installés
+data(package = .packages(all.available = TRUE))
+
+# Exemple de jeu de données
+library(datasets)
+data(mtcars)
+
+```
+
+Mais parfois, il peut s'agir de **données intérréssantes** :
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+# Natural Earth = Fond de carte monde
+library(rnaturalearthdata)
+
+# UN - World Population Prospects 2017
+library(wpp2017)
+
+```
+
+<br/>
+
+### Packages d'API
+
+**Plusieurs <span style="color:#4B0082">packages</span> permettent d'utiliser des API**, et ainsi de récuperer des données directement avec R :
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+# Eurostat
+library(eurostat)
+
+# Worls Bank
+library(wbstats)
+library(WDI)
+
+# Open street map
+library(osmdata)
+
+# Twitter
+library(twitteR)
+library(rtweet)
+
+# Spotify
+library(spotifyr)
+
+# Youtube
+library(tuber)
+
+# Google...
+library(googleAuthR) # Pour s'identifier... parce que c'est google quand même !
+library(googleAnalyticsR)
+library(googleComputeEngineR)
+library(searchConsoleR)
+library(bigQueryR)
+library(gtmR)
+library(googleID)
+library(googleCloudStorageR)
+library(RoogleVision)
+
+```
+<br/>
+
+## 1.2 Collecte sur le web
+
+Au delà des <span style="color:#4B0082">packages</span> permettant l'utilisation d'API existante, et ainsi l'accès direct à des bases de données. **Des <span style="color:#4B0082">packages</span> R permettent de *webscrapper* toute sorte d'information consutable sur le Web**. Les deux packages de référence sont :
+
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+library(rvest)
+library(RSelenium)
+
+```
+
+**De nombeuses ressources (blog, wiki tutoriel...) sont disponibles pour vous aider à utiliser ces packages**. 
+Il existe par exemple un <a href="http://edutechwiki.unige.ch/fr/Web_scraping_avec_R" onclick="window.open(this.href); return false;">wiki assez complet pour le package  <span style="color:#4B0082">rvest</span></a>.  
+
+<br/>
+
+## 1.3 Interroger ses données
+
+Une fois l'import terminé, **plusieurs <span style="color:#8C001A">fonctions</span> permettent de consulter ses données**. Cette étape, indispensable avant tout traitement ou analyse, peut également être réalisée depuis l'inteface RStudio.
+ 
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+# Utilisation du jeu de données exemple 'mtcars' (data frame)
+mtcars <- mtcars
+# Visualiser dans RStudio :
+View(mtcars)
+
+```
+
+```{r warning=FALSE, message=FALSE}
+
+# Aperçu rapide dans la console
+str(mtcars)
+
+# Premiers éléments (6 par défaut) de l'objet
+head(mtcars)
+
+# Derniers éléments (6 par défaut) de l'objet
+tail(mtcars,2)
+
+# Statistiques de base
+summary(mtcars)
+
+# Pour les objets à plusieurs dimensions :
+# Nom des colonnes / objets
+colnames(mtcars)
+
+# Nom des colonnes / objets
+names(mtcars)[3]
+
+# Nom des lignes
+row.names(mtcars) 
+
+# Dimensiomtcarsn de l'objet
+dim(mtcars)
+
+# Nombre de colonne
+ncol(mtcars)
+
+# Nombre de ligne
+nrow(mtcars)
+
+
+# Longueur, nombre d'éléments de l'objet
+length(mtcars)
+# Nombre d'éléments de la première colonne
+length(mtcars[,1])
+
+```
+<br/>
+
+**Depuis l'interface RStudio...**
+
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/consult_data.png)
+</p>
+
+<br/>
+
+
+
+### Classe de données
+
+Les objets peuvent stocker des types de données très différents. Quelques classes de données existantes sous R :
+
+- La chaine de caractères
+```{r warning=FALSE, message=FALSE}
+
+# as.character permet d'assigner la classe integer à une valeur
+a <- as.character("Chaîne de caractères")
+
+class(a)
+
+```
+
+- Nombre entier (integer)
+
+```{r warning=FALSE, message=FALSE}
+
+a <- as.integer(347)
+
+class(a)
+
+```
+
+-  Nombre réel (real or decimal)
+
+```{r warning=FALSE, message=FALSE}
+
+a <- as.numeric(86.3)
+
+# Test - a est elle numérique ?
+is.numeric(a)
+
+```
+
+- Valeur logique (logical or boolean)
+
+```{r warning=FALSE, message=FALSE}
+
+a <- as.logical(c(TRUE, FALSE, TRUE, TRUE, TRUE, TRUE, FALSE))
+# ou
+a <- as.logical(c(1,0,1,1,1,1,0))
+
+a
+
+
+```
+
+- Date
+
+```{r warning=FALSE, message=FALSE}
+
+ma_date <- as.Date("2007-06-22")
+ma_date 
+class(ma_date )
+
+# Les dates sont stockées en nombre. Il s'agit du nombre de jours depuis le 01-01-1970
+as.numeric(ma_date)
+
+# calcul temporel
+as.Date("2007-06-22") - as.Date("1970-02-01")
+
+
+```
+
+<br/>
+
+## > Exemple
+
+**Téléchargez <a href="http://www.gis-cist.fr/Cours/RUSS_running_example.zip" onclick="window.open(this.href); return false;">ce projet R</a> qui contient des données et un script R prêt à être éxécuté**. Dézippez le dossier, puis ouvrez le projet *RUSS_running_example.Rproj*. **Vous y trouverez un script R qui regroupe tous les exemples de code présentés pour chaque étape de la chaîne de traitement**.
+
+
+**ÉTAPE 1 : Import et de consultation de données sous R :**
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+######################################################
+# INED - 6 DECEMBRE 2018 - SEMINAIRE RUSS
+# RUNNING EXAMPLE
+# R. YSEBAERT (UMS RIATE), HUGUES PECOUT (FR CIST)
+######################################################
+
+#####################################
+# Packages nécessaires
+#####################################
+
+# Ces packages sont à installer (une seule fois) pour exécuter le programme ci-dessous
+
+#install.packages("readxl")
+#install.packages("sf")
+#install.packages("stringr")
+#install.packages("ggplot2")
+#install.packages("ggthemes")
+#install.packages("dplyr")
+#install.packages("reshape2")
+#install.packages("questionr")
+
+
+###############################
+# Démo 1 - Import des données
+###############################
+
+# Importer à partir d'un fichier Excel (INSEE) 
+library(readxl)
+data2015 <- data.frame(read_excel("data/Fichier_poplegale_6815.xlsx", skip = 7, sheet = "2015")) 
+data1990 <- data.frame(read_excel("data/Fichier_poplegale_6815.xlsx", skip = 7, sheet = "1990")) 
+data1975 <- data.frame(read_excel("data/Fichier_poplegale_6815.xlsx", skip = 7, sheet = "1975")) 
+
+# Importer des géométries communales (IGN - Geofla 2016)
+library(sf)
+communes <- st_read(dsn = "data/COMMUNE.shp", stringsAsFactors = F)
+
+# Importer l'appartenance intercommunale des communes de la Métropole du Grand Paris
+EPT <- read.csv(file = "data/EPT.csv", sep = ",", stringsAsFactors = F )
+EPT$INSEE_COM <- as.character(EPT$INSEE_COM)
+
+# Quels objets ?
+str(data2015)
+str(communes)
+str(EPT)
+
+# Visualisation des premières lignes
+head(communes)
+head(data2015)
+head(data1990)
+head(data1975)
+head(EPT)
+
+```
+
+
+<br/>
+
+# 2. Gestion & traitement
+
+
+## 2.1 Gestion de vecteur
+
+```{r warning=FALSE, message=FALSE}
+
+x <- c("A","E","N","E","E","E","A","A","N")
+# Trier un vecteur
+sort(x)
+
+# Inverser un vecteur
+rev(x)
+
+# table de contingence
+table(x)
+
+# Valeurs unique d'un vecteur
+unique(x)
+
+```
+
+<br/>
+
+## 2.1 Séléctionner & trier
+
+### Sélectionner
+```{r warning=FALSE, message=FALSE}
+
+# Methode 1 
+mtcars[mtcars$cyl==4 & mtcars$wt > 3,  c(1:7) ]
+
+# Methode 2, fonction subset
+subset(mtcars, cyl==4 & mtcars$wt > 3, select=c(1:7))
+
+# Methode 3, fonction filter() du package 'dplyr'
+library(dplyr)
+mtcars %>% 
+  select(1:7) %>%
+  filter(cyl==4, wt > 3)
+
+
+```
+
+### Trier
+```{r warning=FALSE, message=FALSE}
+
+# Fonction order()
+order_mtcars <- mtcars[order(mtcars$cyl, -mtcars$disp, mtcars$carb, decreasing = TRUE), ]
+head(order_mtcars)
+
+```
+
+<br/>
+
+## 2.2 Regrouper
+
+Comme pour beaucoup de manipulation sous R, il existe plusieurs façon pour regrouper des éléments.
+Ci dessous, deux exemple de regroupement, avec calcul d'une somme :
+
+```{r warning=FALSE, message=FALSE}
+
+# METHODE 1 -> Fonction primitive aggregate(), fonction applicable sur une seule variable
+aggregate(data = mtcars, disp ~ cyl + vs, sum)
+
+# METHODE 2 -> Fonction du package dpkyr
+library(dplyr)
+mtcars %>% group_by(cyl, vs) %>% summarise(sum_disp=sum(disp), moy_hp=mean(hp), nb_element=length(cyl) )
+
+```
+
+<br/>
+
+## 2.3 Chaîne de caractères
+
+**Concaténer une chaîne de caractères :**
+
+```{r warning=FALSE, message=FALSE}
+
+# Concaténation de chaîne de caractère, AVEC séparateur
+paste("Champions", "du", "monde", sep=" ")
+
+# Concaténation de chaîne de caractère, SANS séparateur
+paste0("Champions", "du", "monde")
+
+```
+
+**Gérer la casse :**
+
+```{r warning=FALSE, message=FALSE}
+
+text <- "champion Du MONDEEEEEE !"
+
+# tout minuscule
+tolower(text)
+
+# tout majuscule
+toupper(text)
+
+```
+
+**Interroger une chaîne de caractères :**
+
+```{r warning=FALSE, message=FALSE}
+
+# Nombre de caractères
+nchar(text)
+
+# Rechercher un/des caractère(s) avec grepl()
+# TRUE ou FALSE
+grepl(pattern = "E" , text)
+
+```
+
+**Le package <span style="color:#4B0082">stringr</span>** propose de nombreuses fonctions trés pratiques. Il s'agit du **package de référence pour la gestion de chaîne de caractère**.
+
+```{r warning=FALSE, message=FALSE}
+
+library(stringr)
+
+# Rechercher un/des caractère(s)
+str_detect(text,  "E")
+
+# Position de la première occurrence d'une chaine de caractère
+str_locate(text, "pi")
+
+# Toutes les position du caractère recherché
+str_locate_all(text, "E")
+
+```
+
+**Modifier une chaîne de caractères :**
+
+```{r warning=FALSE, message=FALSE}
+
+text <- "Champions du monde"
+
+# Scinder une chaîne de caractère
+strsplit(text, split = " ", fixed = TRUE)
+
+# Remplacer la première occurence d'une chaîne de caractère
+sub("o", "___", text)
+
+# Remplacer un ou une chaîne de caractère
+gsub("o", "___", text)
+
+# Autre fonction de remplacement
+chartr(text, old = "mn", new = "XY") 
+
+library(stringr)
+# Extraire un segment de chaîne de caractère
+str_sub(text,  5, 9)
+
+library(stringr)
+# Remplacer un segment de chaîne de caractère par un autre
+str_sub(text,  5, 9) <-"pionnes"
+text
+
+library(stringr)
+# Suppression d'espace en début et fin de chaîne de caractère
+str_trim("  abc   ")
+
+```
+
+<br/>
+
+## 2.4 Transformer
+
+```{r warning=FALSE, message=FALSE}
+
+# Construction data frame
+mydata <- data.frame(id=c(1,1,2,2),time=c(1,2,1,2), 
+                     x1=c(5,3,6,2), x2=c(6,5,1,4))
+mydata
+
+# Transposition de la table
+t(mydata)
+
+```
+
+<br/>
+
+Le package <span style="color:#4B0082">reshape2</span> contient plusieurs fonctions de remodelage de table :
+
+```{r warning=FALSE, message=FALSE}
+library(reshape2)
+
+# Fonction melt() 
+mydata_melt <-melt(mydata, id=c("id","time"))
+mydata_melt
+
+#  fonction dcast(data, formula, function) - s'applique sur des 'melted data'
+mydata_melt_cast <- dcast(mydata_melt, id~variable, mean)
+mydata_melt_cast 
+
+
+```
+
+<br/>  
+
+
+Il est aussi possible d'utiliser des fonctions du package <span style="color:#4B0082">tidyr</span>. 
+
+## 2.5 Joindre et fusionner
+
+Pour joindre ou fusionner des tables de données :
+
+```{r warning=FALSE, message=FALSE}
+
+# Construction de deux dataframe avec un identifiant commun
+ID <- as.character(c(1, 2, 3, 4))
+Prenom <- c('John','Peter','Jolie','John')
+Nom <- c('Doe','Gynn','Hope','snow')
+
+# Dataframe 1
+mon_tab_1 <- data.frame(ID, Prenom)
+
+# Dataframe 2
+mon_tab_2 <- data.frame(ID, Nom)
+
+# Jointure des deux objets avec la fonction merge()
+merge(mon_tab_1, mon_tab_2)
+
+# si les clefs de jointure ont des noms différents :
+merge(mon_tab_1, mon_tab_2, by.x="ID", by.y="ID")
+
+# Combiner deux objets par les colonnes
+# Les deux dataframe doivent avoir le même nombre de lignes :
+cbind(mon_tab_1,mon_tab_2)
+
+# Combiner deux objets par les lignes
+# Les deux data frame doivent avoir les mêmes noms de colonnes :
+colnames(mon_tab_1) <- colnames(mon_tab_2)
+rbind(mon_tab_1,mon_tab_2)
+
+```
+
+
+<br/>
+
+
+
+## 2.6 Boucle itérative 
+
+**Une boucle est une série d'instructions exécutées jusqu'à ce qu'un résultat particulier soit obtenu ou qu'une condition pré-déterminée soit remplie**. Les boucles permettent de ré-utiliser des séries d'instructions et permettent ainsi de limiter le nombre d'instructions.
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+# Structure d'une boucle
+for (variable in vecteur) {
+  instruction
+}
+
+```
+
+```{r warning=FALSE, message=FALSE}
+
+# Exemple
+for (i in 1:5) {
+  print(paste0("Passage n°", i))
+}
+
+```
+
+<br/>
+
+## 2.7 Fonctions apply
+
+L'utilisation d'une boucle est très fréquente en traitement de données. Celle-ci sert généralement à effectuer de traitements sur des objets de structure multidimensionnelle (data frame, matrice, array, sf...). Dans ca cas, la boucle for n'est pas la technique otpimale. Les concepteurs de R ont développé des fonctions spécialement prévues à cet effet. 
+
+```{r warning=FALSE, message=FALSE}
+
+# Appliquer une fonction sur les lignes :
+apply(mtcars,1,mean)
+
+# Appliquer une fonction sur les colonnes :
+apply(mtcars,2,sum)
+
+# Appliquer une fonction sur chaque items (sortie vector) :
+sapply(mtcars$mpg, function(x) x/100)
+
+# Appliquer une fonction sur chaque items (sortie list)
+Resultat_lapply <- lapply(mtcars$mpg, function(x) x/100)
+Resultat_lapply[1:5]
+
+```
+<br/>
+
+## 2.8 Test conditionnel
+
+Un test conditionnel permet d'exécuter une portion de code qui effectue différents calculs ou actions, en fonction de l'évaluation d'une condition booléenne, à savoir vraie ou fausse.
+
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+# Test simple
+if (condition){action}
+
+# Test avec deux solutions
+if (condition){
+  action1
+} else {
+  action2
+}
+
+```
+
+```{r warning=FALSE, message=FALSE}
+# Exemple
+x <- "chaîneDeCaractères"
+x <- TRUE
+x <- 12
+
+if (is.character(x)){
+  
+  print("x est une chaîne de caractères")
+  
+} else {
+  
+  if (is.numeric(x)) {
+    
+    print("x est numéric") 
+    
+  } else {
+    
+    print("x est bizarre !")
+    
+  }
+}
+
+```
+
+Il existe également **une <span style="color:#8C001A">fonction</span> primitive pour réaliser un test conditionnel**:
+
+```{r warning=FALSE, message=FALSE}
+
+# Création d'un vecteur de chiffre positifs et négatifs
+x <- c(-22,9,-4,10,-13,5,7)
+
+# Fonction ifelse()
+ifelse(test = (x >= 0), yes = "Positif", no = "Négatif")
+
+```
+
+<br/>
+
+## 2.9 Modification manuelle
+
+**CECI EST UNE TRÉS MAUVAISE PRATIQUE QUE NOUS DÉCONSEILLONS !**
+
+La <span style="color:#8C001A">fonction</span> **edit() permet d'éditer un objet et d'en modifier manuellement ses valeurs**. Il s'agit d'une fonction à éviter pour différentes raisons, mais qui peut s'avèrer salvatrice pour un utilisateur débutant...
+
+```{r warning=FALSE, eval=FALSE, message=FALSE}
+
+my_dataframe <- mtcars
+
+# Fonction edit()
+# Pour que les modifications soient enregistrées,
+# Il est nécéssaire d'assigner le résultat dans un objet
+my_dataframe <- edit(my_dataframe)
+
+```
+
+L'éxexcution de la fonction génère l'ouverture d'une fenêtre dans laquelle les valeurs de l'objet sont affichées et peuvent être modifiées manuellement.
+
+<p class="center">
+![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/edit.png?style=centerme)
+
+Une fois la modification effectuée, cliquer sur une autre cellule puis fermer la fenêtre.
+
+<br/>
+
+## > Exemple
+
+**ÉTAPE 2 : Gestion et traitement de données sous R :**   
+Retrouvez ce bout de code dans le projet *RUSS_running_example.Rproj* téléchargeable <a href="http://www.gis-cist.fr/Cours/RUSS_running_example.zip" onclick="window.open(this.href); return false;">ici</a>.
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+####################################
+# Démo 2 - Manipulation de données
+####################################
+
+# Jointure : On regroupe les objets data2015, data1990 et data1975 en un seul objet "data"
+data <- merge(data2015, data1990, by.x = "COM", by.y = "COM", all.x = T)
+data <- merge(data, data1975, by.x = "COM", by.y = "COM", all.x = T) 
+head(data)
+
+# Jointure 2 : On regroupe avec les Etablissements publics territoriaux d'appartenance
+data <- merge(data, EPT, by.x = "COM", by.y = "INSEE_COM", all.y = T)
+head(data)
+
+# Jointure 3 : On ne conserve que les communes de la MGP
+communes <- merge(communes, EPT, by.x = "INSEE_COM", by.y = "INSEE_COM", all.y = T)
+plot(communes)
+plot(st_geometry(communes), col = "black", border = "white")
+
+# Supprimer les objets inutiles (pas obligatoire mais permet d'y voir plus clair... 
+# Dans les faits on réalise plutôt cette opération à la fin du programme)
+rm(data1975,data1990,data2015,EPT)
+
+# Conserver uniquement certaines variables et les renommer
+fields <- c("COM", "NCC.x", "PSDC75", "PSDC90", "PMUN15", "EPT", "EPT_Nom")
+data <- data[,fields]
+colnames(data) <- c("COM","Nom","POP_1975","POP_1990","POP_2015", "EPT", "EPT_Nom")
+head(data)
+
+# Créer de nouveaux indicateurs à partir de variables pré-existantes
+# Variable quantitative : taux de croissance moyens annuels 1975-1990, 1990-2015 et 1990-2015
+data$acc_7590 <- 100 * (exp(log(data$POP_1990 / data$POP_1975) / (1990 - 1975))-1)
+data$acc_9015 <- 100 * (exp(log(data$POP_2015 / data$POP_1990) / (2015 - 1990))-1)
+data$acc_7515 <- 100 * (exp(log(data$POP_2015 / data$POP_1975) / (2015 - 1975))-1)
+head(data)
+# Variable qualitative : un petit test conditionnel (quelles communes sont en croissance démographique ?)
+data$typo9015 <- ifelse(data$acc_9015 >= 0 & data$acc_9015 < 1, "POP+ (0-1%)",
+                        ifelse(data$acc_9015 > 1, "POP++ (+1%)",
+                               "POP- (<0%)"))
+head(data)
+
+# Extraite une chaine de caractère : département d'appartenance de chaque commune ? 
+library(stringr)
+data$DEP <- str_sub(data$COM,  1, 2)
+head(data)
+
+
+# Et si on aggrégeait le fond communal en EPT ? 
+library(dplyr)
+
+head(communes)
+agg <- communes %>% group_by(EPT) %>% summarize(names = first(EPT_Nom))
+par(mar = c(0.5,0.5,1.5,0.5)) # Ajuster les marges
+plot(st_geometry(communes), col = "white", border = "black") # Le fond communal
+plot(st_geometry(agg), col = NA, border = "red", add = T, lwd = 2) # Les EPT de la métro du Grand Paris
+
+head(data)
+head(communes)
+head(agg)
+
+```
+
+
+<br/>
+
+
+# 3. Analyse
+
+## 3.1 Statistique univariée et bivariée
+
+Pour pratiquer de la statistique basique, **R met à disposition toutes les fonctions basiques nécessaires**.
+
+**Pour les variable quantitatives :**   
+Quelques fonctions mathématiques standards :
+```{r warning=FALSE, message=FALSE}
+
+# Création de deux vecteurs
+x <- c(3, 13, 6, 7, 9.45654, 3, 8, 10, 1, 6, 11, 12.001, 2.1, 5)
+y <- c(8, 26.78, 16, 12, 21.35, 6, 12.85, 14, 4, 12, 15, 14.7, 5.4, 9)
+
+# Minimum
+min(x)
+
+# Maximum
+max(x)
+
+# Somme
+sum(x)
+
+# Moyenne
+mean(x)
+
+# Médiane
+median(x)
+
+# Ecart-type
+sd(x)
+
+# Quantile
+quantile(x)
+
+# min, max, médianne et quartile
+summary(x)
+
+# Rang des éléments
+rank(x)
+
+# Variance
+var(x)
+
+# Coefficient de corrélation
+cor(x, y)
+
+# Modèle linéaire 
+lm(x ~ y) 
+
+# Modèle linéaire généralisé
+glm(x ~ y)
+
+# Pour plus d'information, à utiliser avec la fonction summary()
+summary(glm(x ~ y))
+
+# Logarithme naturel
+log(x)
+
+# exponentiel
+exp(x)
+
+# Arrondir une valeur (ex : 2 nombres après la virgule) :
+round(x, 1)
+
+# Discrétiser une variable
+cut(x, c(0,3,6,9,11,14))
+
+```
+   
+Quelques fonctions de test statistique :
+```{r warning=FALSE, message=FALSE}
+
+# Test de corrélation
+cor.test(x,y)
+
+# test for equality of proportions without continuity correction
+prop.test(x, y) 
+
+# Test for a difference between proportions.
+t.test(x, y) 
+
+# Preform a t-test for  paired data
+pairwise.t.test(x, y) 
+
+# Analyse de la variance
+aov(x ~ y) 
+
+```
+     
+Quelques fonctions très utiles pour visualiser des données :
+```{r warning=FALSE, message=FALSE}
+
+# Histogramme de distribution d'une variable + mean
+hist(x,  breaks = seq(0,16,2))
+# Ajout moyenne
+abline(v=mean(x), col="red", lwd=1 , lty=2, add=T)
+# Autre éléments...
+rug(x, col="blue")
+
+# Graphique simple + régréssion linéaire 
+plot(x,y)
+abline(lm(y ~ x), col="red", lwd=2)
+
+# Boite à moustache
+# boxplot(x)
+boxplot(x,
+        main = "Distribution de ma variable",
+        xlab = "x",
+        col = "orange",
+        border = "brown",
+        horizontal = TRUE)
+
+```
+     
+**Pour les variables qualitatives :**       
+LA fonction indispensable pour les variables qualitatives :
+```{r warning=FALSE, message=FALSE}
+
+# Utilisation d'un jeu de données exemple proposées par le package 'questionr'
+library(questionr)
+data(hdv2003)
+
+# Table de contingence :
+# 1 variable
+table(hdv2003$sexe)
+
+# 2 variables
+table(hdv2003$sport,hdv2003$sexe)
+
+# Ou plus...
+table(hdv2003$sport, hdv2003$cuisine, hdv2003$sexe)
+
+# Calculer les proportions, utilisation de fonction de la library questionr()
+ma_table <- table(hdv2003$sport,hdv2003$sexe)
+prop.table(ma_table)
+
+```
+
+Réaliser un test du chi2 :
+```{r warning=FALSE, message=FALSE}
+
+# Table de contingence
+ma_table <- table(hdv2003$sport, hdv2003$qualif)
+
+# test chi2
+tab.chi2 <- chisq.test(ma_table)
+tab.chi2
+
+# effectifs observés
+tab.chi2$observed
+
+# effectifs théoriques
+tab.chi2$expected
+
+# résidus
+tab.chi2$residuals
+
+```
+
+Visualiser des données qualitatives :
+```{r warning=FALSE, message=FALSE}
+
+# barplot(ma_table)
+barplot(ma_table, 
+        las=2, 
+        cex.names=0.8,
+        col=c("red4","darkblue"))
+# Ajout legend
+legend("topleft", legend = c("Non", "Oui"), fill =c("red4","darkblue"))
+
+# Fonction mosaicplot()
+mosaicplot(ma_table, shade = TRUE, main = "Graphe en mosaïque", cex=0.6)
+
+```
+
+<br/>
+
+## 3.2 Statistique multivariée
+    
+  
+Variables quantitatives :
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+### Analyse en Composante Principale (ACP)
+
+# fonction de base
+prcomp()
+princomp()
+
+# Packages
+library(FactoMineR) - PCA()
+library(ade4) - dudi.pca()
+library(ExPosition) - epPCA()
+
+```
+    
+Variables qualitatives :
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+
+### Analyse Factorielle des Correspondances (AFC)
+### Analyse des Correspondances Multiples (ACM)
+library(FactoMineR) - CA() / MCA()
+library(ade4) - dudi.coa() / dudi.acm()
+library(MASS) - corresp() / mva()
+library(ExPosition) - epCA() /  epMCA()
+
+```
+     
+Variables qualitatives et quantitatives :
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+### Analyse Factorielle Multiple (AFM)
+library(FactoMineR)
+library(ade4) 
+
+```
+    
+Peu importe la fonction que vous décidez d’utiliser, vous pouvez facilement extraire et **visualiser les résultats d'une ACP, AFC ou ACM** avec la **librairie <span style="color:#4B0082">factoextra</span>**. 
+Vous trouverez des exemples trés complets d'utilisation sur <a href="http://www.sthda.com/french/articles/38-methodes-des-composantes-principales-dans-r-guide-pratique/" onclick="window.open(this.href); return false;">ce site</a>.
+   
+**Réaliser des classifications**, à l'aide de fonctions basiques :
+```{r warning=FALSE, message=FALSE}
+
+### Classification par la méthode des nuées dynamiques (k-means)
+# Fonction primitive : kmeans()
+kmeans_3class <- kmeans(mtcars[, c(1,7)], centers=3)
+
+# Représentation graphique
+plot(mtcars$mpg, mtcars$qsec, col=kmeans_3class$cluster, pch=20)
+
+```
+
+```{r warning=FALSE, message=FALSE}
+
+### Classification Ascendante Hiérarchique (CAH)
+# Fonction primitive : hclust()
+
+# Exemple
+# Création d'une matrice de distance avec la fonction dist()
+mat_dist <- dist(mtcars[, c(1,7)], method = "euclidean", diag = FALSE, upper = FALSE, p = 2)
+# CAH
+clusters <- hclust(mat_dist)
+clusters
+
+# Affichage graphique de l'arbre
+plot(clusters)
+
+# Choix du nombre de classes
+clusterCut <- cutree(clusters, 3)
+clusterCut
+
+# Représentation graphique
+library(ggplot2)
+plot(mtcars$mpg, mtcars$qsec, col=clusterCut, pch=20)
+
+```
+
+## 3.3 Traitement d'enquête
+
+Les libraries <span style="color:#4B0082">survey</span> et <span style="color:#4B0082">questionr</span> permettent de gérer et d'analyser facilement des données issues d'enquête.
+
+**Librarie <span style="color:#4B0082">questionr</span> :**
+```{r warning=FALSE, message=FALSE}
+
+library(questionr)
+data(happy)
+
+### Moyenne & variance pondérée
+wtd.mean(happy$age, weights = happy$wtssall)
+wtd.var(happy$age, weights = happy$wtssall)
+
+### Tableau de contigence pondéré
+# Arguments possible importants :
+# na.rm : Prendre en compte les valeurs manquantes ?
+# normwt : Normaliser les poids pour que effectifs pondérés = effectifs initiaux ?
+wtd.table(happy$sex, weights = happy$wtssall)
+wtd.table(happy$sex, happy$degree, weights = happy$wtssall)
+
+
+  
+```
+
+Ces fonctions rendent possibles l’utilisation de la statistique descriptive et le traitement des tableaux croisés (les fonctions <span style="color:#8C001A">lprop()</span>, <span style="color:#8C001A">cprop()</span> ou <span style="color:#8C001A">chisq.test()</span> peuvent être appliquées au résultat d’un <span style="color:#8C001A">wtd.table()</span>) mais restent limitées en termes de tests statistiques ou de graphiques…
+ 
+**librairie <span style="color:#4B0082">survey</span>  :**
+```{r warning=FALSE, message=FALSE}
+
+library(survey)
+data(api)
+mon_enquete <- apiclus1
+# Création objet avec plan d'échantillonage
+mon_enquete_dw <- svydesign(ids = ~1, data = mon_enquete, weights = ~mon_enquete$pw)
+mon_enquete_dw
+
+# Les données brutes sont toujours accessibles dans le nouvel objet créé
+str(mon_enquete$stype)
+str(mon_enquete_dw$variables$stype)
+
+```
+**Une fois le plan d’échantillonnage déclaré, vous pouvez lui appliquer un certain nombre de <span style="color:#8C001A">fonctions</span>** qui prendra en compte la pondération. Exemple:
+```{r warning=FALSE, message=FALSE}
+
+# svymean, svyvar, svytotal, svyquantile : statistiques univariées (moyenne, variance, total, quantiles)
+# svytable : tri à plat et tableau croisé
+# svychisq : test du χ²
+# svyby : statistiques selon un facteur
+# svyttest : test t de Student de comparaison de moyennes
+# svyciprop : intervalle de confiance d’une proportion
+# svyglm : modèles linéaires généralisés (dont régression logistique)
+# svyplot, svyhist, svyboxplot : fonctions graphiques
+
+### Exemple : Fonctions pour représenter les données :
+# Histogramme de distribution
+svyhist(~target, mon_enquete_dw, col = "red", main = "Histogramme")
+# Boite à moustache
+svyboxplot(target ~ 1, mon_enquete_dw, main = "Boxplot simple", ylab = "target")
+# Croiser deux variables
+svyplot(~stype + target, mon_enquete_dw, col = "red", main = "Simple plot")
+
+```
+
+
+## 3.4 Analyse textuelle
+
+De **nombreuses librairies permettent l'analyse textuelle**.  
+**Certaines proposent une interface graphique** qui facilite les traitements :
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+# Iramuteq est une interface du logiciel R
+# Le logiciel R est donc indispensable à son fonctionnement
+library(IRaMuTeQ)
+
+# Il existe également R.temis, qui propose une fenêtre graphique
+library(R.temis)
+# Pour l'interface graphique :
+library(RcmdrPlugin.temis)
+```
+
+    
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/r-temis.png)</p>
+<p class="center"> Fenêtre graphique au chargement de la libraririe <span style="color:#4B0082">RcmdrPlugin.temis</span></p>
+
+<br/>
+**Trois packages semblent se démarquer** dans les communautés spècialistes de l'analyse textuelle : **<span style="color:#4B0082">tidytext</span>**, **<span style="color:#4B0082">tm</span>** et **<span style="color:#4B0082">quanteda</span>**
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+library(tidytext)
+library(tm)
+library(quanteda)
+
+# Dans les trois cas, le corpus de text utilisé est transformé en objet 'corpus', auquel un certain nombre de fonctions peuvent être appliquées.
+
+```
+
+
+**<span style="color:#4B0082">quanteda</span>** est un package developpé par Kenneth Benoit & co. Ce package a été developpé dans le cadre de l'ERC QUANTESS (ERC-2011-StG 283794-QUANTESS).* Une série de packages additionnels fonctionne parfaitement avec quanteda :    
+**library(<span style="color:#4B0082">readtext</span>)**  # Package permettant l'import simple de données textuelle de tout format   
+**library(<span style="color:#4B0082">SpacyR</span>)** # Librarie open source spaCy, pour le traitement automatique du langage (NLP)   
+**library(<span style="color:#4B0082">quanteda.dictionaries</span>)** # Dictionnaires quanteda   
+```{r warning=FALSE, message=FALSE, eval=TRUE}
+
+### Exemple d'utilisation de quanteda
+library(quanteda)
+data(data_char_ukimmig2010)
+
+# Construction d'un objet corpus à partir du text brut
+my_corpus <- corpus(data_char_ukimmig2010)  # build a new corpus from the texts
+summary(my_corpus)
+
+
+# Ou création d'une matrice creuse pour la création d'un simple nuage de mots
+my_dfm <- dfm(data_char_ukimmig2010, remove = stopwords("english"), remove_punct = TRUE)
+
+# Nuage de mot
+textplot_wordcloud(my_dfm, min_count = 6, random_order = FALSE,
+                   rotation = .25,
+                   color = RColorBrewer::brewer.pal(8,"Dark2"))
+
+```
+
+Pour plus d'information sur le package **<span style="color:#4B0082">quanteda</span>**, vous pouvez en consultez <a href="https://cran.r-project.org/web/packages/quanteda/vignettes/quickstart.html" onclick="window.open(this.href); return false;">la vignette</a> très complète.
+
+<br/>
+
+## 3.5 Analyse multiniveau
+
+Tout comme avec Sas® et Stata®, il est **possible de réaliser des analyses multiniveaux avec R**.
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+# Cadre linèaire
+library(lme4) 
+
+# cadre non linéaire
+library(nlme4)
+
+# SOURCE : www.ined.fr
+
+```
+
+<br/>
+
+## 3.6 Analyse de graphe
+
+L'analyse de graphe se pratique beaucoup au travers de logiciel spécifiques (ex : gephi, ucinet, netdraw...). 
+**Comme pour l'analayse textuelle, il est dorénavant possible de réaliser ce genre d'analyse sous R**.
+
+Deux packages font office de référence dans le domaine : **<span style="color:#4B0082">igraph</span>** et **<span style="color:#4B0082">statnet</span>**
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+library(statnet)
+library(igraph)
+
+# Attention, ces deux packages ne permettent pas d’analyser des graphes valués
+# (i.e. l’intensité des liens n’est pas prise en compte pour le calcul des indicateurs).
+# Mais il est possible de faire varier l’épaisseur des liens en fonction de leur 
+# intensité dans une représentation graphique.
+
+# Pour analyser des graphes valués (et bipartis) :
+library(tnet)
+
+# Pour des graphes bipartis
+library(bipartite)
+
+# Pour la modèlisation
+# Pour du blockmodeling
+library(blockmodeling)
+
+# Modélisation des dynamiques d’un graphe
+library(Rsiena)
+
+```
+
+Selon les spécialistes, **<span style="color:#4B0082">igraph</span>** propose une approche plus basique. Les fonctions sont plus efficaces et plus complètes... Mais du coup un peu plus complexe d'utilisation.
+
+Attention, **évitez de lancer en même temps <span style="color:#4B0082">statnet</span> et <span style="color:#4B0082">igraph</span>**, car vous vous exposez à des **risques de conflit entre certaines fonctions (ex : gplot)**. Cette remarque est valable pour de nombreux packages proposant le même genre de fonction et d'analyse.
+
+Exemple d'analyse avec **<span style="color:#4B0082">igraph</span>**:
+```{r warning=FALSE, message=FALSE, eval=TRUE}
+
+library(igraph)
+
+# Construction d'une matrice exemple
+ma_matrice <- matrix(sample(c(0,1),32,T), 8, 8)
+row.names(ma_matrice) <- c("A","B","C","D","E","F","G","H")
+colnames(ma_matrice) <- c("A","B","C","D","E","F","G","H")
+ma_matrice
+
+```
+
+La construction d'un objet igraph peuvent se réaliser à partir de différents types d'objet, en utilisant par exemple les fonctions suivantes :
+```{r warning=FALSE, message=FALSE, eval=TRUE}
+
+# graph_from_data_frame()
+# graph_from_edgelist()
+# graph_from_adj_list()
+# ...
+
+# Exemple de construction objet igraph à partir d'une matrice
+g <- graph_from_adjacency_matrix(ma_matrice)
+g
+
+```
+
+**Un nombre important de fonctions peut être appliqué à cet objet** 'igraph' afin de l'analyser :
+```{r warning=FALSE, message=FALSE, eval=TRUE}
+
+#densité 
+graph.density(g)
+
+# diamètre
+diameter(g)
+
+#intermédiarité
+betweenness(g)
+
+# Centralité
+closeness(g)
+
+# distance
+average.path.length(g)
+
+# plus court chemin
+shortest.paths(g)
+
+# réciprocité
+reciprocity(g, ignore.loops=TRUE)
+
+# Visualisation simple (non interactif), sinon utiliser tkplot(g)
+plot(g) 
+
+
+### Et bien d'autres...
+# cliques(g) - recherche de cliques - à éviter sur les graphes de grande taille
+# largest.cliques(g) - Plus grande clique
+# clique.number(g) - Nombre de cliques
+# transitivité globale - transitivity(g)
+# transitivité locale - transitivity(g, type=c("local"), vids=NULL)
+# dyades - dyad.census(g)
+# triades - triad.census(g)
+# points d’articulation - articulation.points(g)
+# .... 
+
+```
+
+De nombreuses ressources sont disponibles sur le web pour vous aider à utiliser ces packages. Par exemple, **cet article de Laurent Beauguitte : <a href="https://cel.archives-ouvertes.fr/cel-00687871/document" onclick="window.open(this.href); return false;">Analyser les réseaux avec R (packages statnet, igraph et
+tnet)</a>** offre une brève vue d'ensemble de ces trois packages. L'exemple ci-dessus s'appuie sur cet article.
+
+<br/>
+
+## 3.7 Analyse spatiale
+
+Depuis peu, **le package <span style="color:#4B0082">sf</span> est devenu la référence en matière d'analyse spatiale** sur R.
+**Ce package permet d'importer, de gérer et de transformer des données spatiales. Il permet ainsi de réaliser tous les traitements spatiaux proposés par les SIG** (Union, différenciation, regroupement, jointure et intersection spatiale, zone tampons, calcul de distance...). Exemple :
+
+```{r warning=FALSE, message=FALSE, eval=TRUE}
+
+library(sf)
+# Import d'un fichier shape (couche géographique) = Création d'un objet sf
+quartier_paris <- st_read(dsn = "paris/quartier_paris_pop12_pop07.shp", stringsAsFactors = F)
+head(quartier_paris,3)
+
+# Affichage graphique d'un objet sf
+plot(quartier_paris)
+
+# Afficher uniquement la géométrie d'un objet sf
+plot(st_geometry(quartier_paris), col="#aec8f2", border="darkblue", lwd=1)
+
+# Récupération du centroïde d'un quartier - st_centroid()
+mon_quartier <- quartier_paris[quartier_paris$c_quinsee == "7510302",]
+moncentre <- st_centroid(mon_quartier)
+
+# Création d'une zone tampon de 2000 m autour du centroïde - st_buffer()
+buff <- st_buffer(x = st_geometry(moncentre), dist=2000)
+
+# Intersection entre la zone tampon et les quartier de paris
+quartier_paris$buff <- st_intersects(st_geometry(quartier_paris), st_geometry(buff), sparse = FALSE)
+head(quartier_paris)
+
+# Cartographie des résultat des résultats
+par(mar = c(0.5,0.5,1.5,0.5)) 
+plot(st_geometry(quartier_paris), col="#aec8f2", border="darkblue", lwd=1)
+plot(st_geometry(quartier_paris[quartier_paris$buff == TRUE,]), col="pink", lwd=2, border="red", add=T)
+plot(st_geometry(mon_quartier), col="white", border="red", lwd=2, add=T)
+plot(st_geometry(moncentre), pch=20, col="black", cex=1, add=T)
+plot(buff, col=NA, border="black", lwd=1.5, lty=2,add=T)
+
+
+# La fonction st_write() permet d'exporter des couche géographiques
+# st_write(obj = mon_quartier, dsn = "paris/mon_quartier.shp")
+
+```
+
+<br/>
+
+## > Exemple
+
+**ÉTAPE 3 : L'exemple d'analyse est regroupé avec celui des représentations de données (cf.partie suivante).**   
+Retrouvez ce bout de code dans le projet *RUSS_running_example.Rproj* téléchargeable <a href="http://www.gis-cist.fr/Cours/RUSS_running_example.zip" onclick="window.open(this.href); return false;">ici</a>.
+
+<br/>
+
+# 4. Représentation
+
+## 4.1 Représentations basiques
+
+**Réaliser des graphiques en utilisant les <span style="color:#8C001A">fonctions</span> basiques suivantes :**
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+# Nuage de points ou ligne
+plot()
+
+# Graphique en barre
+barplot()
+
+# Histogramme
+hist()
+
+# Boite à moustache
+boxplot()
+
+# Dot plots
+dotcharts()
+
+# Camembert
+pie()
+
+
+# Plusieurs arguments permettent d'améliorer le rendu graphique :
+main = # Définir un titre
+sub = # Définir un sous-titre
+xlab = # Définir nom axe x
+ylab = # Définir nom axe y
+...
+
+
+# Eléments à ajouter à un plot existant
+lines()
+points()
+text()
+title()
+axis()
+mtext() # Label des axes
+abline()
+legend()
+...
+
+# Il est également possible de superposer les plots
+
+```
+R possède déjà des fonctions graphiques  pré-installées, qui permettent en jouant avec les arguments des fonctions de mettre en forme un graphique en y rajoutant des segments, des points, du texte, ou toutes sortes d’autres symboles. Pour une vue d'ensemble des <span style="color:#8C001A">fonctions basiques</span> permettant les représentations graphiques, vous pouvez **consulter <a href="http://publish.illinois.edu/johnrgallagher/files/2015/10/BaseGraphicsCheatsheet.pdf" onclick="window.open(this.href); return false;">la cheatsheet</a> de ces fonctions**.
+
+Exemple :  visualiser la forme d'une distribution
+
+```{r warning=FALSE, message=FALSE}
+
+# Histogramme de distribution
+hist(mtcars$mpg, 
+     breaks=12, 
+     col="goldenrod1",
+     border = "goldenrod4",
+     xlab= "",
+     ylab = "Fréquence",
+     main = "Distribution de la variable statistique 'mpg'")
+
+# Ajout de la moyenne
+abline(v=mean(mtcars$mpg), col="firebrick", lwd=2.5 , add=T)
+# Ajout des quantile
+abline(v=quantile(mtcars$mpg), col="dodgerblue3", lwd=1.5 ,lty=2,  add=T)
+# Légende pour moyenne
+legend("topright", c("moyenne", "quantile"), fill=c(col="firebrick",col="dodgerblue3" ), cex=0.8)
+
+```
+
+**Pour connaître toutes les couleurs implémentées par défaut, <a href="http://www.stat.columbia.edu/~tzheng/files/Rcolor.pdf" onclick="window.open(this.href); return false;">ce document</a> de l'université de columbia peut vous être très utile**.  
+
+**Si vous souhaitez avoir accèes à une plus grande varièté de choix, et pouvoir créer des degradés de couleur**, vous pouvez utiliser **le package de référence <span style="color:#4B0082">RColorBrewer</span>**. 
+
+<br/>
+
+## 4.2 Représentations avancés
+
+Pour produire un graphique complet avec les fonctions basiques de R, il faut parfoit un peu bricoler...  
+Le **package <span style="color:#4B0082";>ggplot2</span>**, développée par **Hadley Wickham** (directeur scientifique de RStudio) et mettant en œuvre la "grammaire graphique" théorisée par Leland Wilkinson, est un plus lorsque l’on souhaite réaliser des graphiques plus complexes et stylisés.   
+Ci-dessous, **quelques exemples d'utilisation de la librarie <span style="color:#4B0082";>ggplot2</span> issues du site <a href="http://r-statistics.co/Top50-Ggplot2-Visualizations-MasterList-R-Code.html" onclick="window.open(this.href); return false;">http://r-statistics.co</a>** :
+
+```{r warning=FALSE, message=FALSE, eval=TRUE, include= TRUE, echo=FALSE}
+
+library(ggplot2)
+library(quantmod)
+data("economics", package = "ggplot2")
+
+# Compute % Returns
+economics$returns_perc <- c(0, diff(economics$psavert)/economics$psavert[-length(economics$psavert)])
+
+# Create break points and labels for axis ticks
+brks <- economics$date[seq(1, length(economics$date), 12)]
+lbls <- lubridate::year(economics$date[seq(1, length(economics$date), 12)])
+
+# Plot
+ggplot(economics[1:100, ], aes(date, returns_perc)) + 
+  geom_area() + 
+  scale_x_date(breaks=brks, labels=lbls) + 
+  theme(axis.text.x = element_text(angle=90)) + 
+  labs(title="Area Chart", 
+       subtitle = "Perc Returns for Personal Savings", 
+       y="% Returns for Personal savings", 
+       caption="Source: economics")
+
+
+library(ggplot2)
+library(ggthemes)
+options(scipen = 999)  # turns of scientific notations like 1e+40
+
+# Read data
+email_campaign_funnel <- read.csv("https://raw.githubusercontent.com/selva86/datasets/master/email_campaign_funnel.csv")
+
+# X Axis Breaks and Labels 
+brks <- seq(-15000000, 15000000, 5000000)
+lbls = paste0(as.character(c(seq(15, 0, -5), seq(5, 15, 5))), "m")
+
+# Plot
+ggplot(email_campaign_funnel, aes(x = Stage, y = Users, fill = Gender)) +   # Fill column
+                              geom_bar(stat = "identity", width = .6) +   # draw the bars
+                              scale_y_continuous(breaks = brks,   # Breaks
+                                                 labels = lbls) + # Labels
+                              coord_flip() +  # Flip axes
+                              labs(title="Email Campaign Funnel") +
+                              theme_tufte() +  # Tufte theme from ggfortify
+                              theme(plot.title = element_text(hjust = .5), 
+                                    axis.ticks = element_blank()) +   # Centre plot title
+                              scale_fill_brewer(palette = "Dark2")  # Color palette
+
+
+
+library(gapminder)
+theme_set(theme_bw())  # pre-set the bw theme.
+
+ggplot(gapminder, aes(gdpPercap, lifeExp, size = pop, frame = year)) +
+  geom_point() +
+  geom_smooth(aes(group = year), 
+              method = "lm", 
+              show.legend = FALSE) +
+  facet_wrap(~continent, scales = "free") +
+  scale_x_log10()  # convert to log scale
+
+
+
+
+# Exemple : Density plots
+g <- ggplot(mpg, aes(cty))
+g + geom_density(aes(fill=factor(cyl)), alpha=0.8) + 
+  labs(title="Density plot", 
+       subtitle="City Mileage Grouped by Number of cylinders",
+       caption="Source: data R mtcars",
+       x="City Mileage",
+       fill="# Cylinders")
+
+
+
+library(ggplot2)
+library(ggalt)
+theme_set(theme_classic())
+
+health <- read.csv("https://raw.githubusercontent.com/selva86/datasets/master/health.csv")
+health$Area <- factor(health$Area, levels=as.character(health$Area))  # for right ordering of the dumbells
+
+# health$Area <- factor(health$Area)
+gg <- ggplot(health, aes(x=pct_2013, xend=pct_2014, y=Area, group=Area)) + 
+        geom_dumbbell(color="#a3c4dc", 
+                      size=0.75, 
+                      point.colour.l="#0e668b") + 
+        scale_x_continuous() + 
+        labs(x=NULL, 
+             y=NULL, 
+             title="Dumbbell Chart", 
+             subtitle="Pct Change: 2013 vs 2014", 
+             caption="Source: https://github.com/hrbrmstr/ggalt") +
+        theme(plot.title = element_text(hjust=0.5, face="bold"),
+              plot.background=element_rect(fill="#f7f7f7"),
+              panel.background=element_rect(fill="#f7f7f7"),
+              panel.grid.minor=element_blank(),
+              panel.grid.major.y=element_blank(),
+              panel.grid.major.x=element_line(),
+              axis.ticks=element_blank(),
+              legend.position="top",
+              panel.border=element_blank())
+plot(gg)
+
+
+library(plyr)
+library(scales)
+library(zoo)
+
+df <- read.csv("https://raw.githubusercontent.com/selva86/datasets/master/yahoo.csv")
+df$date <- as.Date(df$date)  # format date
+df <- df[df$year >= 2012, ]  # filter reqd years
+
+# Create Month Week
+df$yearmonth <- as.yearmon(df$date)
+df$yearmonthf <- factor(df$yearmonth)
+df <- ddply(df,.(yearmonthf), transform, monthweek=1+week-min(week))  # compute week number of month
+df <- df[, c("year", "yearmonthf", "monthf", "week", "monthweek", "weekdayf", "VIX.Close")]
+
+
+# Plot
+ggplot(df, aes(monthweek, weekdayf, fill = VIX.Close)) + 
+  geom_tile(colour = "white") + 
+  facet_grid(year~monthf) + 
+  scale_fill_gradient(low="red", high="green") +
+  labs(x="Week of Month",
+       y="",
+       title = "Time-Series Calendar Heatmap", 
+       subtitle="Yahoo Closing Price", 
+       fill="Close")
+
+
+
+
+
+```
+
+**<a href="https://www.rstudio.com/wp-content/uploads/2015/03/ggplot2-cheatsheet.pdf" onclick="window.open(this.href); return false;">La cheatsheet de <span style="color:#4B0082";>ggplot2</span></a>** permet de se faire une idée des possibilitées offertes par cette extension :
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/cheatsheet_ggplot21.png)
+</p>
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/cheatsheet_ggplot22.png)
+</p>
+
+<br/>
+
+**L'extension <span style="color:#4B0082";>plotly</span> permet de rendre vos graphiques intéractifs**. Vous trouverez de la documentation est un certains nombre d'exemple (cf.ci-dessous) sur le site **<a href="https://plot.ly/r/" onclick="window.open(this.href); return false;">https://plot.ly/r/</a>**.
+```{r warning=FALSE, message=FALSE, eval=TRUE, include= TRUE, echo=FALSE}
+library(plotly)
+library(plyr)
+
+# read in Walmart data
+df <- read.csv("https://raw.githubusercontent.com/plotly/datasets/master/1962_2006_walmart_store_openings.csv")
+
+
+# first plot - bar chart
+total <- count(df$YEAR)
+fit <- fitted(loess(total$freq ~ total$x))
+
+p2 <- plot_ly(data = total, x = ~x, y = ~freq, type = "bar", showlegend=FALSE,
+              marker=list(color=~x, showscale=FALSE)) %>%
+  add_lines(y = fit, showlegend=FALSE, color = 'black') %>%
+  layout(showlegend=FALSE, xaxis = list(side="right", showgrid=FALSE),
+         yaxis=list(showgrid=FALSE))
+
+
+# second plot - scattergeo map
+g <- list(
+  scope = 'usa',
+  projection = list(type = 'albers usa'),
+  showlakes = TRUE,
+  lakecolor = toRGB('white'))
+
+p3 <- plot_geo(df, lat = ~LAT, lon = ~LON) %>%
+  add_markers(
+    text = ~OPENDATE, showlegend=FALSE,
+    marker=list(color = ~YEAR, showscale=FALSE),
+    hoverinfo = "text") %>%
+  layout(geo = g, showlegend=FALSE)
+
+
+# third plot - 3D mesh
+# install.packages("rgl")
+# install.packages("RTriangle")
+# install.packages("graticule")
+# devtools::install_github("r-gris/rangl", force=TRUE)
+
+
+library(rgl)
+library(RTriangle)
+library(graticule)
+
+library(maptools)
+p2
+p3
+# subplot
+# p <- subplot(p3, p2, nrows = 2) %>%
+#   layout(title = "Walmart Store Openings by Year",
+#          xaxis = list(domain=list(x=c(0,0.5),y=c(0,0.5))),
+#          scene = list(domain=list(x=c(0.5,1),y=c(0,0.5))),
+#          xaxis2 = list(domain=list(x=c(0.5,1),y=c(0.5,1))),
+#          showlegend=FALSE,showlegend2=FALSE)
+# 
+# # Create a shareable link to your chart
+# # Set up API credentials: https://plot.ly/r/getting-started
+# chart_link = api_create(p, filename="subplot_mixed-walmart")
+# chart_link
+```
+
+
+<br/>
+
+
+## 4.3 Cartographie
+
+Il existe plusieurs manière de faire des cartes sur R. L'utilisation du package <span style="color:#4B0082";>ggplot2</span></a> est une possibilité. 
+```{r warning=FALSE, message=FALSE}
+
+library(ggplot2)
+
+ggplot() + 
+geom_sf(data = quartier_paris, aes(fill = P12_POP)) + scale_y_continuous()
+
+```
+**D'autres packages, permettent la gestion et/ou la représentation de données spatiales**.
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+library(rgdal)
+library(rgeos)
+library(ggmap)
+library(leaflet)
+library(tmap)
+library(maptools)
+library(cartogram) # cartogrammes continus ou discontinus.
+...
+
+```
+
+Mais si vous souhaitez réaliser une carte thématique dans les règles de l'art, **nous vous recommandons d'utiliser le package <span style="color:#4B0082";>cartography</span></a>, développé par des cartographes**.   
+Ce package permet des représentations cartographiques tels que les **cartes en symboles proportionnels, des cartes choroplèthes, des typologies, des cartes de flux ou des cartes de discontinuités**. Il offre également des fonctions qui permettent d’améliorer la réalisation de la carte, comme des palettes de couleur, des éléments d’habillage (échelle, flèche du nord, titre, légende…), d’y rattacher des labels ou d’accéder à des APIs cartographiques.
+
+<p class="center">
+![](/data/user/p/hpecout/Cours_stats_carto_P8/Cours_statistique_R/figures/carto.png?style=centerme)
+</p>
+<p align="center"> Documentation pour <span style="color:#4B0082";>cartography</span></a> :<a href="https://www.rdocumentation.org/packages/cartography/versions/2.1.1f" onclick="window.open(this.href); return false;"> https://www.rdocumentation.org/packages/cartography/versions/2.1.1</p>
+
+
+Exemple :
+```{r warning=FALSE, eval=TRUE, include= TRUE, echo=FALSE, fig.height=8}
+
+library(cartography)
+# Compute the compound annual growth rate
+nuts2.df$cagr <- (((nuts2.df$pop2008 / nuts2.df$pop1999)^(1/9)) - 1) * 100
+
+# Plot a layer with the extent of the EU28 countries with only a background color
+plot(nuts0.spdf, border = NA, col = NA, bg = "#A6CAE0")
+# Plot non european space
+plot(world.spdf, col  = "#E3DEBF", border = NA, add = TRUE)
+# Plot Nuts2 regions
+plot(nuts2.spdf, col = "grey60",border = "white", lwd = 0.4, add = TRUE)
+
+# Set a custom color palette
+cols <- carto.pal(pal1 = "blue.pal", n1 = 2, pal2 = "red.pal", n2 = 4)
+
+# Plot symbols with choropleth coloration
+propSymbolsChoroLayer(spdf = nuts2.spdf, 
+                      df = nuts2.df, 
+                      var = "pop2008", #  field in df to plot the symbols sizes
+                      inches = 0.1, # set the symbols sizes
+                      var2 = "cagr", #  field in df to plot the colors
+                      col = cols, # symbols colors
+                      breaks = c(-2.43,-1,0,0.5,1,2,3.1), # breaks
+                      border = "grey50",  # border colors of the symbols
+                      lwd = 0.75, # symbols width
+                      legend.var.pos = "topright", # size legend position
+                      legend.var.values.rnd = -3, # size legend value roundinf
+                      legend.var.title.txt = "Total Population", # size legend title
+                      legend.var.style = "e", # size legend type
+                      legend.var2.pos = "right", # color legend position
+                      legend.var2.title.txt = "Compound Annual\nGrowth Rate") # legend title
+
+# layout
+layoutLayer(title = "Demographic trends, 1999-2008", coltitle = "black",
+            sources = "Eurostat, 2011", scale = NULL,
+            author = "cartography", frame ="", col = NA)
+```
+**Consulter la <a href="http://riatelab.github.io/cartography/vignettes/cheatsheet/cartography_cheatsheet.pdf" onclick="window.open(this.href); return false;">cheatsheet</a>** de ce package pour une information claire et concise.
+
+<br/>
+
+
+## > Exemple
+
+**ÉTAPE 3 et 4 : Analyse et représentation de données sous R :**   
+Retrouvez ce bout de code dans le projet *RUSS_running_example.Rproj* téléchargeable<a href="http://www.gis-cist.fr/Cours/RUSS_running_example.zip" onclick="window.open(this.href); return false;">ici</a>.
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+
+#####################################################################
+# Démo 3 - Quelques statistiques et graphiques associés 
+#####################################################################
+
+#  3.1 Statistiques de base - résumé statistique
+summary(data)
+
+# 3.2 Analyse spatiale - distance au centre de Paris (1er arrondissement)
+# Définir un centre (pour les calculs de distance)
+moncentre <- "75101"
+monpoly <- communes[communes$INSEE_COM == moncentre,]
+communes$distance <- c(st_distance(st_centroid(x = monpoly), st_centroid(x = communes)))
+head(communes)
+communes$distance <- as.numeric(communes$distance)
+
+# Jointure des stats spatiales au fichier de données pour analyse et représentations graphiques
+data <- merge(x = data, y = communes[,c("INSEE_COM","distance")], by.x = "COM", by.y = "INSEE_COM", all.x = TRUE)
+head(data)
+
+# 3.3 Visualisations simples associés à des types statistiques  
+# 3.3.1 - Bar plot de la population aux trois périodes de recensement avec une boucle
+par(mar = c(2,2,2,2)) 
+par(mfrow = c(2,2)) # 4 graphiques (2 en colonnes et 2 en ligne)
+
+for (i in 3:5){ # On prend les colonnes 3 à 5 du dataframe
+  popYear <- colnames(data) # récupérer le nom des colonnes
+  hist(data[ ,i], # un histogramme
+       breaks = 20, # la série statistique est coupée en 20 classes
+       main = popYear[i], # titre
+       col = "#4286f4", # couleur des barres
+       border = "white", # couleur des bordures
+       xlab = "Population", # titre de l'axe des X
+       ylab = "Fréquence") # titre de l'axe des Y
+}
+
+
+# 3.3.2 - Deux variables quantitatives : Quelle relation distance au centre / accroissement de la population? 
+cor.test(data$acc_9015, data$distance) 
+par(mfrow = c(1,1)) 
+par(mar = c(4,4,4,4)) 
+plot(data$distance, data$acc_9015) # En quelques instructions on peut obtenir un graphique ! 
+
+# Amélioration du graphique avec les fonctions de base de R...
+data$DEP <- as.factor(data$DEP)
+
+library(cartography)
+colours <- carto.pal(pal1 = "multi.pal", n1 = nlevels(data$DEP)) # 1 couleur par dépt
+
+# Assigner les couleurs aux départements d'appartenance
+data <-data[order(data$DEP, decreasing = FALSE), ]
+data$col <- as.factor(data$DEP)
+levels(data$col) <- colours
+# Représentation graphique
+par(mfrow = c(1,2))
+plot(data$distance, data$acc_9015,
+     ylab = "Taux d'accroissement moyen annuel (1990-2015, %)",
+     xlab = "Distance au centre de l'espace d'étude (m) ",
+     pch = 20,
+     col = as.vector(data$col))
+# Afficher la régression linéaire
+abline((lm(data$acc_9015 ~ data$distance)), col = "red", lwd =1)
+# Afficher la légende
+data$DEP <- as.factor(data$DEP)
+legend("topleft", legend = levels(data$DEP),pch = 20,col = colours, cex = 0.5, pt.cex = 1,
+       title = "Département")
+
+# Il suffirait de quelques modifications dans le code pour reproduire cette analyse avec
+# le taux d'accroissement sur la précédente période censitaire ! 
+# Représentation graphique
+plot(data$distance, data$acc_7590,
+     ylab = "Taux d'accroissement moyen annuel (1975-1990, %)",
+     xlab = "Distance au centre de l'espace d'étude (m) ",
+     pch = 20,
+     col = as.vector(data$col))
+# Afficher la régression linéaire
+abline((lm(data$acc_7590 ~ data$distance)), col = "red", lwd =1)
+# Afficher la légende
+data$DEP <- as.factor(data$DEP)
+legend("topleft", legend = levels(data$DEP),pch = 20,col = colours, cex = 0.5, pt.cex = 1,
+       title = "Département")
+
+
+# On peut aussi utiliser ggplot pour réaliser des graphiques
+library(ggplot2)
+library(ggthemes)
+
+par(mfrow = c(1,1)) # Un graphique par plot 
+ggplot(data, aes(x=distance, y=acc_9015, color = DEP )) + 
+  geom_point(aes(size=POP_2015)) +
+  xlab("Distance au centre (m)") +
+  ylab("Taux d'accroissement moyen annuel (1990-2015, %)") +
+  ggtitle("Croissance démographique et distance au centre de l'espace d'étude") +
+  theme_wsj() +
+  scale_fill_wsj(palette = "colors6", "DEP") + 
+  labs(subtitle="Sources: INSEE-IGN, 2018 / Réalisation : R.Ysebaert / H.Pécout, 2018") +
+  theme(axis.text = element_text(size = 6), 
+        axis.title = element_text(size = 10, face = "bold"),
+        legend.title=element_text(size=12, face = "bold"),
+        legend.text=element_text(size=10),
+        plot.subtitle=element_text(size=8),
+        plot.title = element_text(size = 15, face = "bold")) 
+
+
+# 3.3.3 Deux variables qualitatives : Commune d'appartenance et catégorie d'accroissement de population ? 
+# Test du Chi-2
+tab <- table(data$typo9015, data$EPT_Nom)
+tab.chi2 <- chisq.test(tab)
+tab.chi2
+
+library(questionr)
+ctab <- cprop(tab, total = FALSE)
+
+
+# Diagramme en bâton
+par(mar = c(10,2,2,2))
+col <- c("#fc8d59","#a6d96a","#1a9641")
+barplot(ctab, main = "Croissance démographique 1990-2015 par EPT",las = 2, col= col,
+        cex.axis=0.75, cex.names = 0.75)
+legend("topright", c("POP- (<0%)", "POP+ (0-1%)","POP++ (+1%)"), fill = col, cex = 0.8, bg = "#ffffff80")
+
+
+
+# 3.3.4 - Une variable qualitative et une variable quantitative
+# On charge à représenter le taux de croissance 1975-2015 par EPT
+
+# Le box plot sera ordonné en fonction de la moyenne de chaque EPT sur la variable du taux de croissance de la population
+data$EPT <- with(data, reorder(EPT, acc_9015, mean, na.rm = TRUE))
+
+col <- carto.pal(pal1 = "red.pal", n1 = (nlevels(data$EPT)/2), pal2 = "green.pal", n2 = (nlevels(data$EPT)/2),
+                   middle = FALSE, transparency = TRUE)
+
+par(mar = c(4,4,4,4))
+boxplot(data$acc_9015 ~ data$EPT,
+        col = col,
+        ylab = "Taux de croissance moyen annuel",
+        varwidth = TRUE,
+        range = 1,
+        outline = TRUE,
+        las = 1) 
+
+# Ligne de repère
+abline (h = seq(min(data$acc_9015,na.rm=T),max(data$acc_9015,na.rm=T),0.5), col = "#00000080", lwd = 1, lty = 1)
+
+# Représenter les valeurs moyennes
+xi<- tapply(data$acc_9015, data$EPT, mean, na.rm = T)
+points(xi,col="#7C0000",pch=19)
+
+# Legend for the boxplot
+data$EPT_Nom<- as.factor(data$EPT_Nom)
+data$EPT_Nom <- with(data, reorder(EPT_Nom, acc_9015, mean, na.rm = TRUE))
+legend("topleft",
+       legend = levels(data$EPT_Nom),
+       pch = 20,
+       col = col,
+       cex = 0.6,
+       pt.cex = 1,
+       title = "Etablissements publics territoriaux")
+
+
+# 3.4 - Cartographie
+library(cartography)
+
+# On joint les colonnes du dataframe utiles à la carto
+communes <- merge(x = communes, y = data[,c("COM","POP_1975","POP_1990","POP_2015", "acc_9015","acc_7590")],
+                  by.x = "INSEE_COM", by.y = "COM", all.x = TRUE)
+
+
+# 3.4.1 - Cartographie de discontinuités (choro layer +  discLayer)
+par(mfrow=c(1,2))
+par(mar = c(0.5,0.5,1.5,0.5)) # Ajuster les marges
+
+cols <- carto.pal(pal1 = "red.pal", pal2 = "green.pal",  n1 = 2, n2 = 4)
+
+# 1975- 1990
+plot(st_geometry(communes), col = NA, border = NA)
+
+choroLayer(x = communes, var = "acc_7590", 
+           border = "grey80",
+           col = cols, 
+           breaks = c(min(data$acc_7590,na.rm = T),-0.25,0,0.25,0.5,1,max(data$acc_7590,na.rm = T)),
+           nclass = 10, 
+           legend.pos = "topleft", 
+           legend.values.rnd = 2,
+           lwd=0.5, 
+           add = T,
+           legend.title.txt = "Taux de croissance moyen annuel (%)")
+
+borders <- getBorders(communes)
+
+discLayer(x = borders, # sf 
+          df = communes,
+          var = "acc_7590", # variable used to compute discontinuties 
+          type = "abs", # type of discontinuity measure 
+          method="equal", # discretisation of discontinuities
+          nclass=4, # number of discontinuities classes
+          threshold = 0.5, # representation threshold of discontinuities  
+          sizemin = 0.5, # minimum size of discontinuities lines
+          sizemax = 6, # maximum size of discontinuities lines
+          col="red", # color of the lines
+          legend.values.rnd = 1,
+          legend.title.txt = "Discontinuités \n absolues (max-min)",
+          legend.pos = "bottomleft", 
+          add=TRUE)
+
+layoutLayer(title = "Évolution démo 1975-1990 - Discontinuités territoriales",
+            author = "Ronan Ysebaert, Hugues Pécout 2018", sources = "INSEE, IGN, 2018",
+            scale = 5,
+            frame = TRUE,
+            col = "red",
+            coltitle = "white",
+            south = TRUE)
+
+
+# 1990 - 2015
+plot(st_geometry(communes), col = NA, border = NA)
+
+choroLayer(x = communes, var = "acc_9015", 
+           border = "grey80",
+           col = cols, 
+           breaks = c(min(data$acc_9015,na.rm = T),-0.25,0,0.25,0.5,1,max(data$acc_9015,na.rm = T)),
+           nclass = 10, 
+           legend.pos = "topleft", 
+           legend.values.rnd = 2,
+           lwd=0.5, 
+           add = T,
+           legend.title.txt = "Taux de croissance moyen annuel (%)")
+
+discLayer(x = borders, # sf 
+          df = communes,
+          var = "acc_9015", # variable used to compute discontinuties 
+          type = "abs", # type of discontinuity measure 
+          method="equal", # discretisation of discontinuities
+          nclass=4, # number of discontinuities classes
+          threshold = 0.5, # representation threshold of discontinuities  
+          sizemin = 0.5, # minimum size of discontinuities lines
+          sizemax = 6, # maximum size of discontinuities lines
+          col="red", # color of the lines
+          legend.values.rnd = 1,
+          legend.title.txt = "Discontinuités \n absolues (max-min)",
+          legend.pos = "bottomleft", 
+          add=TRUE)
+
+layoutLayer(title = "Évolution démo 1990-2015 - Discontinuités territoriales",
+            author = "Ronan Ysebaert, Hugues Pécout 2018", sources = "INSEE, IGN, 2018",
+            scale = 5,
+            frame = TRUE,
+            col = "red",
+            coltitle = "white",
+            south = TRUE)
+
+# 3.4.2 - Cercles proportionnels et carte choroplèthe
+# 1975 - 1990
+plot(st_geometry(communes), col = "lightblue", border = NA)
+plot(st_geometry(agg), col = NA, border = "white", lwd = 1, add = T)
+
+propSymbolsChoroLayer(x = communes, var = "POP_1990", var2 = "acc_7590", 
+                      col = cols,
+                      inches = 0.2, 
+                      breaks = c(min(data$acc_7590,na.rm = T),-0.25,0,0.25,0.5,1,max(data$acc_7590,na.rm = T)),
+                      border = "grey50", lwd = 1,
+                      legend.var.pos = "bottomleft", legend.var2.pos = "topleft",
+                      legend.var2.title.txt = 
+                        "Taux de croissance moyen annuel (%)",
+                      legend.var.title.txt = "Population totale 1990",
+                      legend.var.style = "e",
+                      add = T)
+
+layoutLayer(title = "Évolution démo 1975-1990 et population 1990",
+            author = "Ronan Ysebaert, Hugues Pécout 2018", sources = "INSEE, IGN, 2018",
+            scale = 5,
+            frame = TRUE,
+            col = "red",
+            coltitle = "white",
+            south = TRUE)
+
+
+# 1990 - 2015
+plot(st_geometry(communes), col = "lightblue", border = NA)
+plot(st_geometry(agg), col = NA, border = "white", lwd = 1, add = T)
+
+propSymbolsChoroLayer(x = communes, var = "POP_2015", var2 = "acc_9015", 
+                      col = cols,
+                      inches = 0.2, 
+                      breaks = c(min(data$acc_9015,na.rm = T),-0.25,0,0.25,0.5,1,max(data$acc_9015,na.rm = T)),
+                      border = "grey50", lwd = 1,
+                      legend.var.pos = "bottomleft", legend.var2.pos = "topleft",
+                      legend.var2.title.txt = 
+                        "Taux de croissance moyen annuel (%)",
+                      legend.var.title.txt = "Population totale 2015",
+                      legend.var.style = "e",
+                      add = T)
+
+layoutLayer(title = "Évolution démo 1990-2015 et population 2015",
+            author = "Ronan Ysebaert, Hugues Pécout 2018", sources = "INSEE, IGN, 2018",
+            scale = 5,
+            frame = TRUE,
+            col = "red",
+            coltitle = "white",
+            south = TRUE)
+
+
+# 3.4.3 - Carte de potentiel sur les deux recensements
+# 1975-1990
+par(mar = c(0.5,0.5,1.5,0.5)) # Ajuster les marges
+
+plot(st_geometry(communes), col = NA, border = NA)
+
+distr <- communes$POP_1990 / communes$POP_1975
+summary(distr)
+cols <- carto.pal(pal1 = "red.pal", pal2 = "green.pal",  n1 = 2, n2 = 5)
+
+smoothLayer(x = communes,
+            var = 'POP_1990', var2 = 'POP_1975',
+            span = 2000, beta = 2,
+            resolution = 500,
+            legend.title.txt = "Potentiel de croissance de population, \n(pas de lissage = 2 km)",
+            col = cols, 
+            breaks = c(min(communes$POP_1990/communes$POP_1975, na.rm=T),
+                       0.95,1,1.05,1.1,1.15,1.2, 
+                       max(communes$POP_1990/communes$POP_1975, na.rm = T)),
+            mask = st_buffer(communes,1),
+            legend.pos = "topleft", legend.values.rnd = 2,
+            add = T)
+
+plot(st_geometry(agg), col = NA, border = "white", lwd = 1, add = T)
+
+layoutLayer(title = "Croissance démographique 1975-1990 - carte de potentiel",
+            author = "Ronan Ysebaert, Hugues Pécout 2018", sources = "INSEE, IGN, 2018",
+            scale = 5,
+            frame = TRUE,
+            col = "red",
+            coltitle = "white",
+            south = TRUE)
+
+# 1990-2015
+plot(st_geometry(communes), col = NA, border = NA)
+
+distr <- communes$POP_2015 / communes$POP_1990
+summary(distr)
+cols <- carto.pal(pal1 = "red.pal", pal2 = "green.pal",  n1 = 2, n2 = 5)
+
+smoothLayer(x = communes,
+            var = 'POP_2015', var2 = 'POP_1990',
+            span = 2000, beta = 2,
+            resolution = 500,
+            legend.title.txt = "Potentiel de croissance de population, \n(pas de lissage = 2 km)",
+            col = cols, 
+            breaks = c(min(communes$POP_2015/communes$POP_1990, na.rm=T),
+                       0.95,1,1.05,1.1,1.15,1.2, 
+                       max(communes$POP_2015/communes$POP_1990, na.rm = T)),
+            mask = st_buffer(communes,1),
+            legend.pos = "topleft", legend.values.rnd = 2,
+            add = T)
+
+plot(st_geometry(agg), col = NA, border = "white", lwd = 1, add = T)
+
+layoutLayer(title = "Croissance démographique 1990-2015 - carte de potentiel",
+            author = "Ronan Ysebaert, Hugues Pécout 2018", sources = "INSEE, IGN, 2018",
+            scale = 5,
+            frame = TRUE,
+            col = "red",
+            coltitle = "white",
+            south = TRUE)
+
+
+```
+
+<br/>
+
+# 5. Partage et valorisation
+
+## 5.1 Export donnèes et figures
+
+Pour partager votre travail réalisé sur R, **il existe une serie de fonctions primitives ou mises à disposition par des packages, qui permettent d'exporter vos figures, vos tableaux ainsi que vos fichier de données** en formats très divers.
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+#### EXPORTER Table de données #### 
+
+## fonctions primitives
+# .txt /.csv / ...
+write.table(Mon_Objet, "c:/mydata.txt", sep="\t") 
+# .csv
+write.csv(Mon_Objet, file = "MyData.csv")
+
+
+# format Excel
+library(xlsx)
+write.xlsx(Mon_Objet, "c:/mydata.xlsx") 
+
+# format sas, spss... 
+library(foreign)
+write.foreign(Mon_Objet, "c:/mydata.txt", "c:/mydata.sas",   package="SAS")
+write.foreign(Mon_Objet, "c:/mydata.txt", "c:/mydata.sps",   package="SPSS")
+
+# format shape
+library(sf) 
+st_write()
+
+
+
+####  EXPORTER graphique #### 
+
+## fonctions primitives
+# format jpeg
+jpeg()
+
+# format png
+png()
+
+# format pdf
+pdf()
+
+# format svg
+svg()
+
+
+# Exemple - Enregistrement d'un plot en format png
+jpeg('rplot.jpg')
+plot(runif(10, 1, 100),runif(10, 1, 100))
+dev.off()
+
+
+# Enregistrement d'un tableau de donnée en format png
+library(gridExtra)
+png("test.png", height = 50*nrow(mtcars), width = 200*ncol(mtcars))
+grid.table(mtcars)
+dev.off()
+
+
+
+# format GIF
+# Source : https://yihui.name/animation/example/savegif/
+# Nécessite d'installer ImageMagick sur votre system system
+library(animation) 
+saveGIF({brownian.motion(pch = 21, cex = 5, col = "red", bg = "yellow")}, 
+        movie.name = "brownian_motion.gif", 
+        interval = 0.1, 
+        nmax = 30, 
+        ani.width = 600)
+
+
+```
+
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/brownian_motion.gif)
+</p>
+
+<br/>
+
+## 5.2 Production de document
+
+Depuis quelques années, **RStudio intègre la possibilité d'écrire des notebooks combinant de manière interactive du code R, du texte mis en forme en markdown (JavaScript, CSS), et des appels à du code Python, Bash, SQL, Rccp et Stan**.    
+La combinaison de ces différents languages permet de produire des **documents de qualité pouvant contenir l'intégralité de son code (affiché ou non), ses résultats graphiques (ou non) et des commentaires (texte, note de bas de page, bibliographie, lien...) associé**. Le choix du format de fichier en sorti est assez large : pdf, html, word/odt, diapositives, LaTeX...
+
+**Pour produire un document en Rmarkdown**, il est necessaire d'**écrire son code dans un fichier.rmd** (et non .R) :   
+
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/rmd.png)
+</p>  
+
+<br/>
+
+**Le documents se compose alors de trois zones** :    
+- **En en-tête de fichier, les paramètres généraux** du documents    
+- Dans le corps du fichier, **les zones de rédaction** mise en page différent selon le type de fichier en sorti (html, pdf, word...)    
+- Dans le corps du fichier, **les chunks, qui sont balises dans lequel on peut insérer du code d'un autre langage**   
+
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/exemplermd.png)
+</p>
+
+**Pour générer le document, il suffit de 'knit' le document** (en haut à droite de l'interface RStudio). Votre fichier sera alors réecris en format markdown classique, puis traiter par **pandoc** (logiciel libre de conversion de documents numériques en ligne de commande, à installer selon les systèmes d'exploitation) qui genère le docmuent final.
+**La production du document peut également être executée automatiquement, en encapsulant tout le code avec la fonction <span style="color:#8C001A">render()</span>**. 
+
+
+De **nombreux arguments peuvent être affectés à chaque chunk**, pour gérer les éléments qui apparaissent (ou non) :   
+
+**eval** = Executer le code du chunk durant la génération du document      
+**include** = Rendre le code du chunk visible dans le document      
+**warning** = Affichage des messages d'alerte dans le document, après le chunk      
+**message** = Affichage des messages d'information dans le document, après le chunk      
+**echo** = Affichage des résultat (ex: graphiques) dans le document, après le chunk      
+**fig.height** = Hauteur des figures générées par le chunk      
+**fig.width** = largeur des figures générées par le chunk      
+...
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+# ```{r nom_du_chunk, warning=FALSE, message=FALSE, eval=TRUE, include= TRUE, echo=FALSE...}
+
+# ```
+
+```
+    
+**Ce document est un bon exemple des possibilitées offerte par un Rmarkdown... Il est intégralement produit avec R. Preuve à l'appui : **
+
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/markdown_CIST.png)
+</p>
+
+**De nombreuses ressources sont disponibles pour comprendre et apprendre à utiliser cette extension. En voici trois de réference :**       
+- <a href="https://rmarkdown.rstudio.com/" onclick="window.open(this.href); return false;">https://rmarkdown.rstudio.com/</a>    
+- <a href="https://bookdown.org/yihui/rmarkdown/" onclick="window.open(this.href); return false;">https://bookdown.org/yihui/rmarkdown/</a>     
+- <a href="https://www.rstudio.com/wp-content/uploads/2015/03/rmarkdown-reference.pdf" onclick="window.open(this.href); return false;">https://www.rstudio.com</a>    
+
+<br/>
+
+## 5.3 Application web et Dashboard
+
+**Pour les utilisateurs avancés**, R offre aussi la possibilité de construire des **applications web** et des **tableaux de bord**. Deux librairies, a combiner avec R Markdown peuvent vous permettre de réaliser de véritable document ou application interactives :
+```{r warning=FALSE, message=FALSE,eval=FALSE}
+
+# Application web :
+library(shiny)
+
+# Dashboard :
+library(flexdashboard)
+
+```
+Comme pour la plupart des packages de référence, **ces deux librairies sont trés documentées**. De nombreux exemples sont consultables sur le web, notamment sur le site de RStudio :   
+- <a href="https://shiny.rstudio.com/" onclick="window.open(this.href); return false;">https://shiny.rstudio.com/</a>    
+- <a href="https://shiny.rstudio.com/gallery/" onclick="window.open(this.href); return false;">https://shiny.rstudio.com/gallery/</a>      
+- <a href="https://shiny.rstudio.com/images/shiny-cheatsheet.pdf" onclick="window.open(this.href); return false;">https://shiny.rstudio.com/images/shiny-cheatsheet.pdf/a>    
+
+<br/>
+
+## > Exemple
+
+**ÉTAPE 5 : Partage et valorisation sous R :**       
+Vous pouvez télécharger le bout de code exemple (cf. capture ci-dessous) dans le projet *RUSS_running_example.Rproj* à <a href="http://www.gis-cist.fr/Cours/RUSS_running_example.zip" onclick="window.open(this.href); return false;">ce lien</a>.
+
+<p class="center">![](/data/user/p/hpecout/Cours_INED_InitiationR/figures/Example_roro.png)
+</p>
+
+
+<br/>
+
+
+# Sources & références
+
+
+Il existe de **nombreuses ressources documentaires sur R**. En voici quelques-unes **en libre accès**, dont certaines ont largement été **utilisées pour produire ce document** :
+
+<ul class="bibli">
+
+<li><a href="https://cran.r-project.org/doc/html/interface98-paper/paper.html" onclick="window.open(this.href); return false;">*R : Past and Future History*</a>, Ross Ihaka</li>
+
+<li><a href="http://larmarange.github.io/analyse-R/" onclick="window.open(this.href); return false;">*analyse-R*</a>, Joseph Larmarange & al</li> 
+
+<li><a href="https://juba.github.io/tidyverse/index.html" onclick="window.open(this.href); return false;">*Introduction à R et au tidyverse*</a>, Julien Barnier</li> 
+
+<li><a href="https://cran.r-project.org/doc/contrib/Paradis-rdebuts_fr.pdf" onclick="window.open(this.href); return false;">*R pour les débutants*</a>, Emmanuel Paradis</li> 
+
+<li><a href="http://r-statistics.co/" onclick="window.open(this.href); return false;">*r-statistics.co*</a>, Selva Prabhakaran</li> 
+
+<li><a href="https://rgeomatic.hypotheses.org/" onclick="window.open(this.href); return false;">*Blog Rgeomatic*</a>, Timothée Giraud</li> 
+
+<li><a href="http://perso.ens-lyon.fr/lise.vaudor/" onclick="window.open(this.href); return false;">*Blog R-atique*</a>, Lise Vaudor</li> 
+
+<li><a href="https://framabook.org/docs/Respace/RetEspace_final_20140901.pdf" onclick="window.open(this.href); return false;">*R et espace*</a>, groupe ElementR</li> 
+
+<li><a href="https://www.statmethods.net/" onclick="window.open(this.href); return false;">*statmethods.net*</a>, Robert I. Kabacoff</li> 
+
+<li><a href="https://cran.r-project.org/doc/contrib/Kauffmann_aide_memoire_R.pdf" onclick="window.open(this.href); return false;">*AIDE MÉMOIRE R*</a>, Mayeul KAUFFMANN</li> 
+
+<li><a href="https://www.r-bloggers.com/" onclick="window.open(this.href); return false;">*r-bloggers.com*</a>, Foundation for Open Access Statistics.</li> 
+
+<li><a href="https://www.rstudio.com/" onclick="window.open(this.href); return false;">*Site web de RStudio*</a>, de RStudio</li> 
+
+<li><a href="https://www.RStudio.com/resources/cheatsheets/" onclick="window.open(this.href); return false;">*Cheat Sheets*</a>, de RStudio</li> 
+
+</ul>
+
+
+<br>
+
+
+# -- R Session info -- 
+
+
+```{r, eval=T, echo=T}
+R.version
+```
+
+
+```{r, eval=T, echo=T}
+sessionInfo()
+```
+
+
+<br>
+
+<p style="text-align:center;color:grey;font-style:italic;font-size:12px;padding:0;margin-top:15px;">Ce document est mis à disposition selon les termes de la **Licence Creative Commons** : <br>
+<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" onclick="window.open(this.href); return false;">Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)</a></p>

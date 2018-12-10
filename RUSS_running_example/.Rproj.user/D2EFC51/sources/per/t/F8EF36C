@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1543511585843.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "798113116",
+    "id" : "F8EF36C",
+    "lastKnownWriteTime" : 1543596511,
+    "last_content_update" : 1543596511546,
+    "path" : "C:/Users/Ronan/Desktop/RUSS_running_example/Adapt_Lyon.R",
+    "project_path" : "Adapt_Lyon.R",
+    "properties" : {
+        "cursorPosition" : "421,0",
+        "scrollLine" : "408",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 5,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
